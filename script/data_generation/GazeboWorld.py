@@ -17,8 +17,7 @@ from rosgraph_msgs.msg import Clock
 from gazebo_msgs.msg import ModelState, ModelStates
 
 class GazeboWorld():
-    def __init__(self, table, robot_name):
-        rospy.sleep(2.)
+    def __init__(self, robot_name):
         rospy.init_node(robot_name+'_GazeboWorld', anonymous=False)
 
         #------------Params--------------------
@@ -35,10 +34,6 @@ class GazeboWorld():
         self.target_point = [0., 0.]
         self.model_states_data = None
         self.robot_name = robot_name
-        if robot_name == 'robot1':
-            self.y_pos = 0.
-        else:
-            self.y_pos = 1.05
         self.depth_image_size = [160, 128]
         self.rgb_image_size = [128, 84]
         self.bridge = CvBridge()
@@ -60,14 +55,12 @@ class GazeboWorld():
         self.target_size = 0.55
         self.target_theta_range = np.pi/3
 
-        self.table = copy.deepcopy(table)
-
         #-----------Default Robot State-----------------------
         self.default_state = ModelState()
         self.default_state.model_name = robot_name  
         self.default_state.pose.position.x = 16.5
         self.default_state.pose.position.y = 16.5
-        self.default_state.pose.position.z = self.y_pos
+        self.default_state.pose.position.z = 0.
         self.default_state.pose.orientation.x = 0.0
         self.default_state.pose.orientation.y = 0.0
         self.default_state.pose.orientation.z = 0.0
@@ -97,9 +90,9 @@ class GazeboWorld():
         self.depth_image_sub = rospy.Subscriber(robot_name+'/camera/depth/image_raw', Image, self.DepthImageCallBack)
         self.rgb_image_sub = rospy.Subscriber(robot_name+'/camera/rgb/image_raw', Image, self.RGBImageCallBack)
       
-
         rospy.on_shutdown(self.shutdown)
 
+        rospy.sleep(2.)
 
     def ModelStateCallBack(self, data):
         start_time = time.time()
@@ -119,7 +112,7 @@ class GazeboWorld():
 
         if self.state_call_back_flag:
             self.model_states_data = copy.deepcopy(data)
-            state_call_back_flag = False
+            self.state_call_back_flag = False
 
             # odom_GT = Odometry()
             # odom_GT.header.stamp = self.sim_time
@@ -251,9 +244,9 @@ class GazeboWorld():
     def GetModelStates(self):
         self.state_call_back_flag = True
         object_list = []
-        skip_objs_text_list = ['ground', 'room', 'robot']
-        large_obj_text_dict = {'table_conference': [2, 3], # h: 2, w: 3
-                               'bookshelf_large': [1, 3],
+        skip_objs_text_list = ['ground', 'room', 'robot', 'picture']
+        # [h, w]
+        large_obj_text_dict = {'bookshelf_large': [1, 2],
                                'desk_drawer': [2, 1],
                                'sofa_set_3': [1, 2],
                                'sofa_set_1': [1, 3],
@@ -283,8 +276,7 @@ class GazeboWorld():
                 obj_info = {'name': obj_name, 
                             'pose': [obj_pose.position.x, obj_pose.position.y, euler[2]],
                             'size': size}
-            else:
-                break
+                object_list.append(obj_info)
 
         return object_list
 
@@ -535,5 +527,6 @@ class GazeboWorld():
         return ang
 
 
-# env = StageWorld(10)
-# print env.GetLaserObservation()
+# env = GazeboWorld('robot1')
+# for i, obj_info in enumerate(env.GetModelStates()):
+#     print i, ' | ', obj_info

@@ -31,12 +31,6 @@ class GridWorld(object):
         self.Clear()
         self.CreateMap()
 
-        fig=plt.figure(figsize=(1, 2))
-        fig.add_subplot(1, 2, 1)
-        plt.imshow(self.map, origin='lower')
-        plt.show()
-        assert False
-
     def Clear(self):
         self.map = np.zeros((self.map_size, self.map_size))
 
@@ -79,16 +73,53 @@ class GridWorld(object):
         self.DrawVerticalLine([2, 8], 15, 1)
 
     def MapObjects(self, obj_list):
-        
+        for obj_info in obj_list:
+            name = obj_info['name']
+            pose = obj_info['pose']
+            size = obj_info['size']
+            if np.pi/4 < self.wrap2pi(pose[2]) < np.pi/4*3 or -np.pi/4*3 < self.wrap2pi(pose[2]) < -np.pi/4: 
+                size = [size[1], size[0]]
+            map_y, map_x = self.Real2Map(pose)
+            # in the middle or boardline
+            
+            if (map_y + 1) % self.grid_size < 2: # boardline
+                map_y_centre = (map_y + 1)/self.grid_size*self.grid_size
+            else:
+                map_y_centre = (map_y + 1)/self.grid_size*self.grid_size + self.grid_size/2
+            map_y_min = map_y_centre - int(float(size[0])/2 * self.grid_size)
+            map_y_max = map_y_centre + int(float(size[0])/2 * self.grid_size)
+
+            
+            if (map_x + 1) % self.grid_size < 2: # boardline
+                map_x_centre = (map_x + 1)/self.grid_size*self.grid_size
+            else:
+                map_x_centre = (map_x + 1)/self.grid_size*self.grid_size + self.grid_size/2
+            map_x_min = map_x_centre - int(float(size[1])/2 * self.grid_size)
+            map_x_max = map_x_centre + int(float(size[1])/2 * self.grid_size)
+            map_y_min = max(0, map_y_min)
+            map_y_max = min(self.map_size, map_y_max)
+            map_x_min = max(0, map_x_min)
+            map_x_max = min(self.map_size, map_x_max)
+            # print name+' | real: ({:.3f}, {:.3f}) | map: ({}, {}) | map_centre: ({}, {})'.format(
+            #       pose[0], pose[1], map_x, map_y, map_x_centre, map_y_centre)          
+            self.map[map_y_min:map_y_max, map_x_min:map_x_max] = 1
+                
+
 
     def Real2Map(self, real_pos):
-        pass
+        x, y, yaw = real_pos
+        map_x = int(x / self.p2r) + 100
+        map_y = int(y / self.p2r) + 100
+        return [map_y, map_x]
 
     def Map2Real(self, map_pos):
-        pass
+        map_y, map_x = map_pos
+        x = map_x * self.p2r - 10.
+        y = map_y * self.p2r - 10.
+        return (x, y)
                             
     def GetAugMap(self):
-        augment_area = 3
+        augment_area = 4
         mid_map = np.zeros([self.map_size, self.map_size])
         self.aug_map = np.zeros([self.map_size, self.map_size])
         for y in xrange(0, self.map_size):
@@ -98,45 +129,27 @@ class GridWorld(object):
                    x_max = np.amin([x+augment_area+1, self.map_size])
                    y_min = np.amax([y-augment_area, 0])
                    y_max = np.amin([y+augment_area+1, self.map_size])
-                   mid_map[y_min:y_max, x_min:x_max]= 1
+                   self.aug_map[y_min:y_max, x_min:x_max]= 1
 
-        augment_area = 1
-        self.aug_map = copy.deepcopy(mid_map)
-        for y in xrange(0, self.map_size):
-            for x in xrange(0, self.map_size):
-                table_y = y/self.grid_size
-                table_x = x/self.grid_size
-                if table_y % (self.room_size + 1)==self.room_size or table_x % (self.room_size + 1)==self.room_size:
-                    if mid_map[y][x] == 1:
-                       x_min = np.amax([x-augment_area, 0])
-                       x_max = np.amin([x+augment_area+1, self.map_size])
-                       y_min = np.amax([y-augment_area, 0])
-                       y_max = np.amin([y+augment_area+1, self.map_size])
-                       self.aug_map[y_min:y_max, x_min:x_max]= 1   
-
-        # fig=plt.figure(figsize=(1, 2))
-        # fig.add_subplot(1, 2, 1)
-        # plt.imshow(mid_map)
-        # fig.add_subplot(1, 2, 2)
-        # plt.imshow(self.aug_map)
-        # plt.show()
-        # assert False
-
-    def RandomInitPose(self):
+    def RandomPath(self):
         space = 1.
-        while space == 1.:
-            position = np.random.randint(0, 4, size=[2])
-            table_goal_x = position[0]*6+2
-            table_goal_y = position[1]*6+2
-            space = copy.deepcopy(self.table[table_goal_y, table_goal_x])
-        real_goal_x = (table_goal_x+0.5)*self.grid_size * self.p2r
-        real_goal_y = (table_goal_y+0.5)*self.grid_size * self.p2r
-        real_goal_theta = self.wrap2pi(np.random.randint(4) * np.pi/2)
+        map_path = []
+        dist = 0.
+        while space == 1. or len(map_path) < 50:
+            # room = np.random.randint(0, 2, size=[2])
+            room = np.array([1, 1])
+            init_map_pos = (room * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
+            goal_map_pos = (room * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
+            space = self.aug_map[init_map_pos[0], init_map_pos[1]] * self.aug_map[goal_map_pos[0], goal_map_pos[1]]
 
-        return [real_goal_x, real_goal_y, real_goal_theta]
+            map_path, real_path = self.GetPath([init_map_pos[1], init_map_pos[0], goal_map_pos[1], goal_map_pos[0]])
+
+        init_yaw = np.arctan2(map_path[0][0] - map_path[0][1], map_path[1][0] - map_path[1][1])
+        return map_path, real_path, [real_path[0][0], real_path[0][1], init_yaw]
 
 
     def GetPath(self, se):
+        self.path_map = copy.deepcopy(self.map)
         n = m = self.map_size
         directions = 8 # number of possible directions to move on the map
 
@@ -150,16 +163,16 @@ class GridWorld(object):
         [xA, yA, xB, yB] = se
         path = pathFind(copy.deepcopy(self.aug_map), directions, dx, dy, xA, yA, xB, yB, n, m)
         map_route = []
+        real_route = []
         x = copy.deepcopy(xA)
         y = copy.deepcopy(yA)
         for t in xrange(len(path)):
             x+=dx[int(path[t])]
             y+=dy[int(path[t])]
-            map_route.append([x, y])
-        if len(map_route) > 0:
-            real_route = (np.asarray(map_route, dtype=float) * self.p2r).tolist()
-        else:
-            real_route = []
+            map_route.append([y, x])
+            self.path_map[y, x] = 2
+            real_route.append(self.Map2Real([y, x]))
+            
         return map_route, real_route
 
     def GetNextNearGoal(self, path, pose):
@@ -168,7 +181,6 @@ class GridWorld(object):
             return last_point, path[1:]
         else:
             return last_point, path
-
 
     def wrap2pi(self, ang):
         while ang > np.pi:
@@ -199,30 +211,20 @@ def LogData(Data, num, path):
             writer.writerow(row)
 
 def DataGenerate(data_path, robot_name='robot1', rviz=False):
-    world = GridWorld()
-    world.map, switch_action = world.RandomSwitchRoom()
-    print(switch_action)
-    world.CreateTable()
+    world = GridWorld()    
+    env = GazeboWorld('robot1')
+    obj_list = env.GetModelStates()
+    world.MapObjects(obj_list)
+    world.GetAugMap()
     cv2.imwrite('./world/map.png', np.flipud(1-world.map)*255)
 
     FileProcess()
-
-    env = GazeboWorld(world.table, robot_name, rviz=rviz)
     print "Env initialized"
 
     rate = rospy.Rate(5.)
     T = 0
 
     time.sleep(2.)
-    pickle_path = os.path.join(CWD, 'world/model_states_data.p')
-    # pickle.dump( env.model_states_data, open(pickle_path, "wb"))
-    # assert False
-    env.ResetWorld()
-    env.ResetModelsPose(pickle_path)
-    env.SwitchRoom(switch_action)
-    env.state_call_back_flag = True
-    time.sleep(2.)
-
 
     init_pose = world.RandomInitPose()
     env.target_point = init_pose
@@ -383,4 +385,17 @@ def DataGenerate(data_path, robot_name='robot1', rviz=False):
 
 if __name__ == '__main__':
     world = GridWorld()    
+    env = GazeboWorld('robot1')
+    obj_list = env.GetModelStates()
+    world.MapObjects(obj_list)
+    world.GetAugMap()
 
+    map_path, real_path = world.RandomPath()
+
+
+    fig=plt.figure(figsize=(16, 8))
+    fig.add_subplot(1, 2, 1)
+    plt.imshow(world.path_map, origin='lower')
+    fig.add_subplot(1, 2, 2)
+    plt.imshow(world.aug_map, origin='lower')
+    plt.show()
