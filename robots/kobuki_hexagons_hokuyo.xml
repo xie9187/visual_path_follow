@@ -753,7 +753,7 @@
   <gazebo reference="base_laser_link">
     <sensor name="head_hokuyo_sensor" type="gpu_ray">
       <pose>0 0 0 0 0 0</pose>
-      <visualize>true</visualize>
+      <visualize>false</visualize>
       <update_rate>40</update_rate>
       <ray>
         <scan>

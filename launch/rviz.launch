@@ -2,7 +2,7 @@
   <param name="/use_sim_time" value="true"/>
 
   <!-- Run the map server -->
-  <node name="map_server" pkg="map_server" type="map_server" args="$(find lan_nav)/config/map.yaml" >
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find visual_path_follow)/config/map.yaml" >
     <param name="frame_id" value="/map" />
   </node>
 
@@ -14,6 +14,6 @@
     </node>
   </group>
 
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find lan_nav)/config/navigation.rviz" output="screen"/>
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find visual_path_follow)/config/navigation.rviz" output="screen"/>
 
 </launch>

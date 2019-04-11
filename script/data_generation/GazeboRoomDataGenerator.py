@@ -134,6 +134,7 @@ class GridWorld(object):
     def RandomPath(self):
         space = 1.
         map_path = []
+        real_path = []
         dist = 0.
         while space == 1. or len(map_path) < 50:
             # room = np.random.randint(0, 2, size=[2])
@@ -144,7 +145,7 @@ class GridWorld(object):
 
             map_path, real_path = self.GetPath([init_map_pos[1], init_map_pos[0], goal_map_pos[1], goal_map_pos[0]])
 
-        init_yaw = np.arctan2(map_path[0][0] - map_path[0][1], map_path[1][0] - map_path[1][1])
+        init_yaw = np.arctan2(real_path[1][1] - real_path[0][1], real_path[1][0] - real_path[0][0])
         return map_path, real_path, [real_path[0][0], real_path[0][1], init_yaw]
 
 
@@ -200,8 +201,8 @@ def FileProcess():
     time.sleep(1.)
     print "file processed"
 
-def LogData(Data, num, path):
-    name = ['laser', 'action', 'cmd', 'goal', 'goal_pose', 'cmd_list', 'obj_name']
+def LogData(Data, image_save, num, path):
+    name = ['action']
     for x in xrange(len(name)):
         file = open(path+'/'+str(num)+'_'+name[x]+'.csv', 'w')
         writer = csv.writer(file, delimiter=',', quotechar='|')
@@ -210,7 +211,16 @@ def LogData(Data, num, path):
                 row = [row]
             writer.writerow(row)
 
-def DataGenerate(data_path, robot_name='robot1', rviz=False):
+    image_path = os.path.join(path, str(num)+'_image')
+    try:
+        os.stat(image_path)
+    except:
+        os.makedirs(image_path)
+    for idx, image in enumerate(image_save):
+        cv2.imwrite(os.path.join(image_path, str(idx))+'.jpg', image)
+
+
+def DataGenerate(data_path, robot_name='robot1'):
     world = GridWorld()    
     env = GazeboWorld('robot1')
     obj_list = env.GetModelStates()
@@ -223,179 +233,111 @@ def DataGenerate(data_path, robot_name='robot1', rviz=False):
 
     rate = rospy.Rate(5.)
     T = 0
+    episode = 0
 
     time.sleep(2.)
-
-    init_pose = world.RandomInitPose()
-    env.target_point = init_pose
     
-    for x in xrange(10000):
-        rospy.sleep(2.)
-        env.SetObjectPose(robot_name, [env.target_point[0], env.target_point[1], 0., env.target_point[2]])
-        rospy.sleep(4.)
+    while not rospy.is_shutdown():
         print ''
-        env.plan = None
-        pose = env.GetSelfStateGT()
-        init_goal, final_goal, obj_name = world.NextGoal(pose, env.model_states_data)
-        env.target_point = final_goal
-        goal = copy.deepcopy(env.target_point)
-        env.distance = np.sqrt(np.linalg.norm([pose[0]-goal[0], pose[1]-goal[1]]))
-        env.GoalPublish(goal)
-        print 'goal', goal
+        map_route, real_route, init_pose = world.RandomPath()
+        env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
 
-        j = 0
+        time.sleep(1)
+        dynamic_route = copy.deepcopy(real_route)
+        env.LongPathPublish(real_route)
+        time.sleep(1.)
+
+        pose = env.GetSelfStateGT()
+        goal = real_route[-1]
+        env.target_point = goal
+        env.distance = np.sqrt(np.linalg.norm([pose[0]-goal[0], pose[1]-goal[1]]))
+
+        total_reward = 0
+        prev_action = [0., 0.]
+        epi_q = []
+        loop_time = []
+        t = 0
         terminal = False
-        laser_save = []
+        result = 0
         action_save = []
         cmd_save = []
-        goal_save = []
-        goal_pose_save = []
-
-        plan_time_start = time.time()
-        no_plan_flag = False
-        while (env.plan_num < 2 or env.next_near_goal is None) \
-                and not rospy.is_shutdown():
-            if time.time() - plan_time_start > 3.:
-                no_plan_flag = True
-                break
-
-        if no_plan_flag:
-            print 'no available plan'
-            env.GoalCancel()
-            rospy.sleep(2.)
-            env.plan_num = 0
-            continue
-
-        print 'plan recieved'
-        pose = env.GetSelfStateGT()
-        plan = env.GetPlan()
-
-        if plan:
-            print 'plan length', len(plan)
-        else:
-            env.GoalCancel()
-            rospy.sleep(2.)
-            env.plan_num = 0
-            continue
-
-        if len(plan) == 0 :
-            env.GoalCancel()
-            rospy.sleep(2.)
-            env.plan_num = 0
-            continue
-
-        check_point_list, cmd_list = world.GetCommandPlan(pose, plan)
-        print cmd_list
-
-        idx = 0
+        depth_image_save = []
+        rgb_image_save = []
         file_num = len([f for f in os.listdir(data_path) if os.path.isfile(os.path.join(data_path, f))])
-        stage = 0
-        table_current_x = int(pose[0] / world.grid_size / world.p2r)
-        table_current_y = int(pose[1] / world.grid_size / world.p2r)
-        table_position = [table_current_x, table_current_y]
-        cmd_idx = 0
-        prev_cmd_idx = 0
-        loop_time_buff = []
-        while not terminal and not rospy.is_shutdown():
+        while not rospy.is_shutdown():
             start_time = time.time()
-            rgb = env.GetRGBImageObservation()
-            laser = env.GetLaserObservation()
-            pose = env.GetSelfStateGT()
-            [v, w] = env.GetSelfSpeedGT()
-            goal = env.GetNextNearGoal(theta_flag=True)
 
-            
+            terminal, result, reward = env.GetRewardAndTerminate(t)
+            total_reward += reward
 
-            terminal, result, _ = env.GetRewardAndTerminate(j)
-            if result == 1: # crash
+            if t > 0:
+                # log data
+                rgb_image_save.append(rgb_image)
+                action_save.append(action.tolist())
+
+            if result == 1:
+                print 'Finish!!!!!!!'
+                Data = [action_save]
+                print "save sequence "+str(file_num/len(Data))
+                LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
+                rgb_image_save, action_save = [], []
+
                 break
-            
-            init_dist = np.linalg.norm([pose[0] - init_goal[0], pose[1] - init_goal[1], pose[2] - init_goal[2]])
-            goal_dist = np.linalg.norm([pose[0] - final_goal[0], pose[1] - final_goal[1]])
 
-            if init_dist < 0.1 and stage == 0:
-                stage += 1
-                prev_cmd_idx = copy.deepcopy(cmd_idx)
-                cmd_idx += 1
-            elif goal_dist < env.dist_threshold and stage == 1:
-                stage += 1
+            local_goal = env.GetLocalPoint(goal)
+            env.PathPublish(local_goal)
 
-            if stage == 0:
-                curr_goal = init_goal
-                curr_goal_theta = init_goal[2]
-            elif stage == 2:
-                curr_goal = goal
-                curr_goal_theta = goal[2]
-            else:
-                curr_goal = goal
-                curr_goal_theta = None
+            rgb_image = env.GetRGBImageObservation()
 
-            local_goal = env.GetLocalPoint(curr_goal)
-            save_local_goal = env.GetLocalPoint(goal)
+            # get action
+            pose = env.GetSelfStateGT()
+            try:
+                near_goal, dynamic_route = world.GetNextNearGoal(dynamic_route, pose)
+            except:
+                pass
+            local_near_goal = env.GetLocalPoint(near_goal)
+            action = env.Controller(local_near_goal, None, 1)
 
-            env.PathPublish(save_local_goal)
-            action = env.Controller(stage=stage, target_point=local_goal, target_theta=curr_goal_theta)
-            env.SelfControl(action)
-            
-            # command
-            table_current_x = int(pose[0] / world.grid_size / world.p2r)
-            table_current_y = int(pose[1] / world.grid_size / world.p2r)
-            prev_table_position = copy.deepcopy(table_position)
-            table_position = [table_current_y, table_current_x]
-            if prev_table_position in check_point_list and table_position not in check_point_list:
-                cmd_idx += 1
+            env.SelfControl(action, [0.3, np.pi/6])
 
-            if table_position in check_point_list:
-                cmd = 0
-            else:
-                cmd = cmd_list[cmd_idx]
-
-            if cmd == 5:
-                goal_pose = env.GetLocalPoint(env.target_point) 
-            else:
-                goal_pose = [0., 0.]
-
-            # log data
-            laser_save.append(laser.tolist())
-            action_save.append(action.tolist())
-            cmd_save.append(cmd)
-            goal_save.append(save_local_goal)
-            goal_pose_save.append(goal_pose)
-
-            # cv2.imwrite(data_path+'/image/'+str(j)+'.png', rgb)
-
-            if result == 2 and cmd == 5:
-                cmd_save[0] = 0
-                Data = [laser_save[1:], action_save[1:], cmd_save[:-1], goal_save[1:], goal_pose_save[1:], cmd_list, obj_name]
-                print "save sequence "+str(file_num/7)
-                LogData(Data, str(file_num/7), data_path)
-                laser_save, action_save, cmd_save, goal_save, goal_pose_save = [], [], [], [], []
-
-            j += 1
+            t += 1
             T += 1
+            loop_time.append(time.time() - start_time)
+
             rate.sleep()
-            loop_time = time.time() - start_time
-            loop_time_buff.append(loop_time)
-            # print 'loop time: {:.4f} |action: {:.2f}, {:.2f} | stage: {:d} | obj: {:s}'.format(
-            #                   time.time() - start_time, action[0], action[1], stage, obj_name)
-            if (j+1)%100 == 0:
-                print 'loop time mean: {:.4f} | max:{:.4f}'.format(np.mean(loop_time_buff), np.amax(loop_time_buff))
-        env.plan_num = 0
+            # print '{:.4f}'.format(time.time() - start_time)
+
+        print 'Episode:{:} | Steps:{:} | Reward:{:.2f} | T:{:}'.format(episode, 
+                                                                       t, 
+                                                                       total_reward, 
+                                                                       T)
+        episode += 1
         
 
 if __name__ == '__main__':
-    world = GridWorld()    
-    env = GazeboWorld('robot1')
-    obj_list = env.GetModelStates()
-    world.MapObjects(obj_list)
-    world.GetAugMap()
+    machine_id = socket.gethostname()
+    data_path = os.path.join(CWD[:-19], 'vpf_data/')
+    data_path = os.path.join(data_path, machine_id)
 
-    map_path, real_path = world.RandomPath()
+    try:
+        os.stat(data_path)
+    except:
+        os.makedirs(data_path)
+
+    DataGenerate(data_path)
+
+    # world = GridWorld()    
+    # env = GazeboWorld('robot1')
+    # obj_list = env.GetModelStates()
+    # world.MapObjects(obj_list)
+    # world.GetAugMap()
+
+    # map_path, real_path, init_pose = world.RandomPath()
 
 
-    fig=plt.figure(figsize=(16, 8))
-    fig.add_subplot(1, 2, 1)
-    plt.imshow(world.path_map, origin='lower')
-    fig.add_subplot(1, 2, 2)
-    plt.imshow(world.aug_map, origin='lower')
-    plt.show()
+    # fig=plt.figure(figsize=(16, 8))
+    # fig.add_subplot(1, 2, 1)
+    # plt.imshow(world.path_map, origin='lower')
+    # fig.add_subplot(1, 2, 2)
+    # plt.imshow(world.aug_map, origin='lower')
+    # plt.show()

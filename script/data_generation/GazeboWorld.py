@@ -110,18 +110,18 @@ class GazeboWorld():
             v = np.sqrt(v_x**2 + v_y**2)
             self.speed_GT = [v, data.twist[idx].angular.z]
 
+        odom_GT = Odometry()
+        odom_GT.header.stamp = self.sim_time
+        odom_GT.header.seq = self.state_cnt
+        odom_GT.header.frame_id = self.robot_name+'_tf/odom'
+        odom_GT.child_frame_id = ''
+        odom_GT.pose.pose = data.pose[idx]
+        odom_GT.twist.twist = data.twist[idx]
+        self.pose_GT_pub.publish(odom_GT)
+
         if self.state_call_back_flag:
             self.model_states_data = copy.deepcopy(data)
             self.state_call_back_flag = False
-
-            # odom_GT = Odometry()
-            # odom_GT.header.stamp = self.sim_time
-            # odom_GT.header.seq = self.state_cnt
-            # odom_GT.header.frame_id = self.robot_name+'_tf/odom'
-            # odom_GT.child_frame_id = ''
-            # odom_GT.pose.pose = data.pose[idx]
-            # odom_GT.twist.twist = data.twist[idx]
-            # self.pose_GT_pub.publish(odom_GT)
 
 
     def RGBImageCallBack(self, img):
@@ -385,7 +385,7 @@ class GazeboWorld():
                 print 'crash'
                 result = 2
                 reward = -1.
-            if t >= 150:
+            if t >= 300:
                 result = 2
                 print 'time out'
             if self.movement_counter >= 10:
@@ -434,8 +434,8 @@ class GazeboWorld():
         my_path.header.frame_id = 'map'
 
         init_pose = PoseStamped()
-        init_pose.pose = self.robot_pose
-        my_path.poses.append(init_pose)
+        # init_pose.pose = self.robot_pose
+        # my_path.poses.append(init_pose)
 
         for position in path:
             pose = copy.deepcopy(init_pose)
