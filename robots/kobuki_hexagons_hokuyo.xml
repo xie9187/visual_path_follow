@@ -65,7 +65,7 @@
     <inertial>
       <!-- COM experimentally determined -->
       <origin xyz="0.01 0 0"/>
-      <mass value="30.4"/>
+      <mass value="2.4"/>
       <!-- 2.4/2.6 kg for small/big battery pack -->
       <!-- Kobuki's inertia tensor is approximated by a cylinder with homogeneous mass distribution
              More details: http://en.wikipedia.org/wiki/List_of_moment_of_inertia_tensors
@@ -117,7 +117,7 @@
     </visual>
     <collision>
       <geometry>
-        <cylinder length="0.0206" radius="0.0350"/>
+        <cylinder length="0.0206" radius="0.0352"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
@@ -214,16 +214,16 @@
     </inertial>
   </link>
   <gazebo reference="wheel_left_link">
-    <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
+    <mu1>10.0</mu1>
+    <mu2>10.0</mu2>
     <kp>1000000.0</kp>
     <kd>100.0</kd>
     <minDepth>0.001</minDepth>
     <maxVel>1.0</maxVel>
   </gazebo>
   <gazebo reference="wheel_right_link">
-    <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
+    <mu1>10.0</mu1>
+    <mu2>10.0</mu2>
     <kp>1000000.0</kp>
     <kd>100.0</kd>
     <minDepth>0.001</minDepth>
