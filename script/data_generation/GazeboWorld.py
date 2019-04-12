@@ -299,7 +299,7 @@ class GazeboWorld():
             # for i in xrange(0,2):
                 self.set_state.publish(object_state)
                 # rospy.sleep(0.1)
-        print 'Set '+name
+        # print 'Set '+name
 
     def ResetWorld(self):
         self.self_speed = [0.0, 0.0]
@@ -484,7 +484,7 @@ class GazeboWorld():
 
         P = np.array([.6, .8])
         I = np.array([.0, .0])
-        D = np.array([.0, .8])
+        D = np.array([.5, .8])
 
         U_t = err_p * P + err_i * I + err_d * D
 

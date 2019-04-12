@@ -27,6 +27,7 @@ class GridWorld(object):
         self.path_width = self.grid_size
         self.wall_width = 1
         self.p2r = P2R
+        self.area = np.array([1, 1])
 
         self.Clear()
         self.CreateMap()
@@ -71,6 +72,27 @@ class GridWorld(object):
         self.DrawHorizontalLine([12, 18], 8, 1)
         self.DrawHorizontalLine([12, 18], 2, 1)
         self.DrawVerticalLine([2, 8], 15, 1)
+
+    def RandomEnv(self, obj_list):
+        self.area = np.random.randint(0, 2, size=[2])
+        # self.area = np.array([1, 1])
+        obj_pose_dict = {}
+        for obj_info in obj_list:
+            name = obj_info['name']
+            pose = obj_info['pose']
+            size = obj_info['size']
+            map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
+            yaw_i = np.random.randint(0, 4)
+            if yaw_i in [1, 3]:
+                size = [size[1], size[0]]
+            if size[0]%2 == 0:
+                map_pos[0] -= self.grid_size/2
+            if size[1]%2 == 0:
+                map_pos[1] -= self.grid_size/2
+            real_pos = self.Map2Real(map_pos)
+            real_pose = [real_pos[0], real_pos[1], 0., np.pi/2*yaw_i]
+            obj_pose_dict[name] = real_pose
+        return obj_pose_dict
 
     def MapObjects(self, obj_list):
         for obj_info in obj_list:
@@ -137,10 +159,8 @@ class GridWorld(object):
         real_path = []
         dist = 0.
         while space == 1. or len(map_path) < 50:
-            # room = np.random.randint(0, 2, size=[2])
-            room = np.array([1, 1])
-            init_map_pos = (room * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
-            goal_map_pos = (room * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
+            init_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
+            goal_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
             space = self.aug_map[init_map_pos[0], init_map_pos[1]] * self.aug_map[goal_map_pos[0], goal_map_pos[1]]
 
             map_path, real_path = self.GetPath([init_map_pos[1], init_map_pos[0], goal_map_pos[1], goal_map_pos[0]])
@@ -224,21 +244,30 @@ def DataGenerate(data_path, robot_name='robot1'):
     world = GridWorld()    
     env = GazeboWorld('robot1')
     obj_list = env.GetModelStates()
-    world.MapObjects(obj_list)
-    world.GetAugMap()
     cv2.imwrite('./world/map.png', np.flipud(1-world.map)*255)
 
     FileProcess()
+    
     print "Env initialized"
 
     rate = rospy.Rate(5.)
     T = 0
     episode = 0
-
     time.sleep(2.)
-    
     while not rospy.is_shutdown():
-        print ''
+        time.sleep(2.)
+
+        print 'randomising the environment'
+        world.CreateMap()
+        obj_pose_dict = world.RandomEnv(obj_list)
+        for name in obj_pose_dict:
+            env.SetObjectPose(name, obj_pose_dict[name])
+        time.sleep(2.)
+        obj_list = env.GetModelStates()
+        world.MapObjects(obj_list)
+        world.GetAugMap()
+        print 'randomisation finished'
+
         map_route, real_route, init_pose = world.RandomPath()
         env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
 
@@ -281,11 +310,10 @@ def DataGenerate(data_path, robot_name='robot1'):
                 print "save sequence "+str(file_num/len(Data))
                 LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
                 rgb_image_save, action_save = [], []
-
                 break
 
             local_goal = env.GetLocalPoint(goal)
-            env.PathPublish(local_goal)
+            # env.PathPublish(local_goal)
 
             rgb_image = env.GetRGBImageObservation()
 
