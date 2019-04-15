@@ -304,8 +304,7 @@ def DataGenerate(data_path, robot_name='robot1'):
                 rgb_image_save.append(rgb_image)
                 action_save.append(action.tolist())
 
-            if result == 1:
-                print 'Finish!!!!!!!'
+            if result == 1 or result == 2:
                 Data = [action_save]
                 print "save sequence "+str(file_num/len(Data))
                 LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)

@@ -34,8 +34,8 @@ class GazeboWorld():
         self.target_point = [0., 0.]
         self.model_states_data = None
         self.robot_name = robot_name
-        self.depth_image_size = [160, 128]
-        self.rgb_image_size = [128, 84]
+        self.depth_image_size = [64, 64]
+        self.rgb_image_size = [64, 64]
         self.bridge = CvBridge()
 
         self.object_poses = []
@@ -81,7 +81,6 @@ class GazeboWorld():
         self.resized_rgb_img = rospy.Publisher(robot_name+'/camera/rgb/image_resized',Image, queue_size = 10)
         self.pose_GT_pub = rospy.Publisher(robot_name+'/base_pose_ground_truth',Odometry, queue_size = 10)
         self.dynamic_path_pub = rospy.Publisher(robot_name+'/dynamic_path', Path, queue_size=5)
-
 
         self.object_state_sub = rospy.Subscriber('gazebo/model_states', ModelStates, self.ModelStateCallBack)
         self.laser_sub = rospy.Subscriber('mybot/laser/scan', LaserScan, self.LaserScanCallBack)
@@ -174,12 +173,12 @@ class GazeboWorld():
         cv_img[cv_img < 0.4] = 0.
         cv_img/=(10./255.)
 
-        # # inpainting
-        # mask = copy.deepcopy(cv_img)
-        # mask[mask == 0.] = 1.
-        # mask[mask != 1.] = 0.
-        # mask = np.uint8(mask)
-        # cv_img = cv2.inpaint(np.uint8(cv_img), mask, 3, cv2.INPAINT_TELEA)
+        # inpainting
+        mask = copy.deepcopy(cv_img)
+        mask[mask == 0.] = 1.
+        mask[mask != 1.] = 0.
+        mask = np.uint8(mask)
+        cv_img = cv2.inpaint(np.uint8(cv_img), mask, 3, cv2.INPAINT_TELEA)
 
         cv_img = np.array(cv_img, dtype=np.float32)
         cv_img*=(10./255.)
@@ -383,15 +382,15 @@ class GazeboWorld():
             if self.stop_counter == 2:
                 terminate = True
                 print 'crash'
-                result = 2
+                result = 3
                 reward = -1.
-            if t >= 300:
+            if t >= 200:
                 result = 2
                 print 'time out'
             if self.movement_counter >= 10:
                 terminate = True
                 print 'stuck'
-                result = 2
+                result = 3
                 reward = -1.
                 self.movement_counter = 0
 
