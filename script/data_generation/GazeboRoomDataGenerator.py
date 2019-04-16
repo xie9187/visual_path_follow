@@ -75,7 +75,6 @@ class GridWorld(object):
 
     def RandomEnv(self, obj_list):
         self.area = np.random.randint(0, 2, size=[2])
-        # self.area = np.array([1, 1])
         obj_pose_dict = {}
         for obj_info in obj_list:
             name = obj_info['name']
@@ -158,7 +157,7 @@ class GridWorld(object):
         map_path = []
         real_path = []
         dist = 0.
-        while space == 1. or len(map_path) < 50:
+        while space == 1. or len(map_path) < 70:
             init_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
             goal_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
             space = self.aug_map[init_map_pos[0], init_map_pos[1]] * self.aug_map[goal_map_pos[0], goal_map_pos[1]]
@@ -257,16 +256,19 @@ def DataGenerate(data_path, robot_name='robot1'):
     while not rospy.is_shutdown():
         time.sleep(2.)
 
-        print 'randomising the environment'
+        
         world.CreateMap()
-        obj_pose_dict = world.RandomEnv(obj_list)
-        for name in obj_pose_dict:
-            env.SetObjectPose(name, obj_pose_dict[name])
-        time.sleep(2.)
+        if episode % 5 == 0:
+            print 'randomising the environment'
+            obj_pose_dict = world.RandomEnv(obj_list)
+            for name in obj_pose_dict:
+                env.SetObjectPose(name, obj_pose_dict[name])
+            time.sleep(2.)
+            print 'randomisation finished'
         obj_list = env.GetModelStates()
         world.MapObjects(obj_list)
         world.GetAugMap()
-        print 'randomisation finished'
+        
 
         map_route, real_route, init_pose = world.RandomPath()
         env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
@@ -309,6 +311,8 @@ def DataGenerate(data_path, robot_name='robot1'):
                 print "save sequence "+str(file_num/len(Data))
                 LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
                 rgb_image_save, action_save = [], []
+                break
+            elif result == 4:
                 break
 
             local_goal = env.GetLocalPoint(goal)

@@ -384,13 +384,13 @@ class GazeboWorld():
                 print 'crash'
                 result = 3
                 reward = -1.
-            if t >= 200:
+            if t >= 100:
                 result = 2
                 print 'time out'
             if self.movement_counter >= 10:
                 terminate = True
                 print 'stuck'
-                result = 3
+                result = 4
                 reward = -1.
                 self.movement_counter = 0
 
