@@ -2,7 +2,7 @@ import tensorflow as tf
 
 def _lstm_cell(n_hidden, n_layers, name=None):
     """select proper lstm cell."""
-    cell = tf.contrib.rnn.BasicLSTMCell(n_hidden, state_is_tuple=True, name=name or 'basic_lstm_cell')
+    cell = tf.contrib.rnn.BasicLSTMCell(num_units=n_hidden, state_is_tuple=True, name=name or 'basic_lstm_cell')
     if n_layers > 1:
         cell = tf.contrib.rnn.MultiRNNCell(
             [tf.contrib.rnn.BasicLSTMCell(
@@ -17,6 +17,14 @@ def _lstm_cell(n_hidden, n_layers, name=None):
 #           [tf.contrib.rnn.LayerNormBasicLSTMCell(n_hidden,
 #            dropout_keep_prob=keep_prob, reuse=reuse) for _ in range(n_layers)])
 #   return cell
+
+def _gru_cell(n_hidden, n_layers, name=None):
+    cell = tf.contrib.rnn.GRUCell(num_units=n_hidden, name=name or 'gru_cell')
+    if n_layers > 1:
+        cell = tf.contrib.rnn.MultiRNNCell(
+            [tf.contrib.rnn.GRUCell(
+                num_units=n_hidden, name=name or 'gru_cell') for _ in range(n_layers)])
+    return cell
 
 def create_inite_state(n_hidden, n_layers, batch_size, scope=None):
 
