@@ -102,7 +102,7 @@ def Conv2D(inputs,
            trainable=True,
            reuse=False,
            max_pool=False):
-    if not max_poll:    
+    if not max_pool:    
         outputs = tf.contrib.layers.conv2d(inputs=inputs,
                                            num_outputs=num_outputs,
                                            kernel_size=kernel_size,
@@ -123,7 +123,7 @@ def Conv2D(inputs,
                                            reuse=reuse,
                                            scope=scope or 'conv2d')
         outputs = tf.contrib.layers.max_pool2d(inputs=outputs,
-                                               kernel_size=kernel_size,
+                                               kernel_size=2,
                                                stride=strides,
                                                padding='VALID',
                                                scope=scope+'_max_pool')
@@ -158,7 +158,7 @@ def DenseLayer(inputs,
     outputs = tf.contrib.layers.fully_connected(inputs=inputs,
                                                 num_outputs=hidden_num,
                                                 activation_fn=activation,
-                                                weights_initializer=initializers.xavier_initializer(),
+                                                weights_initializer=tf.contrib.layers.xavier_initializer(),
                                                 biases_initializer=tf.zeros_initializer(),
                                                 reuse=reuse,
                                                 trainable=trainable,
