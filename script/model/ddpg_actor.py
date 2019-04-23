@@ -10,64 +10,46 @@ class Actor(object):
                  sess,
                  batch_size,
                  max_step,
+                 demo_len,
                  n_layers,
                  n_hidden,
-                 n_cmd_type,
-                 dim_emb=64,
-                 dim_laser=[666, 3],
-                 dim_goal=2,
-                 dim_cmd=1,
-                 dim_action=2,
-                 action_range=[0.4, np.pi/4],
-                 loss_weight=[1.,1.],
-                 gpu_num=1,
+                 dim_a=2,
+                 dim_img=[64, 64, 3],
+                 action_range=[0.3, np.pi/6],
                  tau=0.1,
                  learning_rate=1e-4,
-                 demo_flag=False
                  ):
         self.sess = sess
-        self.max_step = max_step
         self.batch_size = batch_size
+        self.max_step = max_step
+        self.demo_len = demo_len
         self.n_layers = n_layers
         self.n_hidden = n_hidden
-        self.n_cmd_type = n_cmd_type
-        self.dim_emb = dim_emb
-        self.dim_laser = dim_laser
-        self.dim_goal = dim_goal
-        self.dim_cmd = dim_cmd
-        self.dim_action = dim_action
-        self.loss_weight = loss_weight
+        self.dim_a = dim_a
+        self.dim_img = dim_img
         self.action_range = action_range
-        self.gpu_num = gpu_num
         self.tau = tau
         self.learning_rate = learning_rate
-        self.demo_flag = demo_flag
 
         with tf.variable_scope('actor'):
             # training input
-            self.input_laser = tf.placeholder(tf.float32, shape=[None, dim_laser[0], dim_laser[1]], name='input_laser')
-            self.input_cmd = tf.placeholder(tf.int64, shape=[None, dim_cmd], name='input_cmd')
-            self.input_cmd_next = tf.placeholder(tf.int64, shape=[None, dim_cmd], name='input_cmd_next')
-            self.input_cmd_skip = tf.placeholder(tf.int64, shape=[None, dim_cmd], name='input_cmd_skip')
-            self.prev_action = tf.placeholder(tf.float32, shape=[None, dim_action], name='prev_action')
-            self.input_obj_goal = tf.placeholder(tf.float32, shape=[None, dim_goal], name='input_obj_goal')
-            self.prev_state_2 = LSTMStateTuple(tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='initial_state_2.c'),
-                                               tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='initial_state_2.h'))
-            self.status_label = tf.placeholder(tf.int64, shape=[None, dim_cmd], name='status_label')
-            self.action_label = tf.placeholder(tf.float32, shape=[None, dim_action], name='action_label')
-            # build model with multi-gpu parallely
-            inputs = [self.input_laser, 
-                      self.input_cmd, 
-                      self.input_cmd_next,
+            self.input_demo_img = tf.placeholder(tf.float32, shape=[None, demo_len] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
+            self.input_demo_a = tf.placeholder(tf.float32, shape=[None, demo_len, dim_a], name='input_demo_a') #b,l of demo,2
+            self.input_eta = tf.placeholder(tf.float32, shape=[None], name='input_eta') #b
+            
+            self.input_img = tf.placeholder(tf.float32, shape=[None, max_step, dim_img[0], dim_img[1], dim_img[2]], name='input_img') #b,l,h,d,c
+            self.gru_h_in = tf.placeholder(tf.float32, shape=[None, n_hidden], name='gru_h_in') #b,n_hidden
+
+            # testing input
+            self.input_img_test = tf.placeholder(tf.float32, shape=[None] + dim_img, name='input_img_test') #b,h,d,c
+
+            inputs = [self.input_demo_img, 
+                      self.input_demo_a, 
+                      self.input_eta,
                       self.input_cmd_skip,
                       self.prev_action,
                       self.input_obj_goal,
                       self.prev_state_2]
-
-            # inputs_splits = []
-
-            # for var in inputs:
-            #     inputs_splits.append(tf.split(var, self.gpu_num, axis=0))
 
             with tf.variable_scope('online'):
                 self.pred_action, self.logits, self.state_2 = self.Model(inputs)

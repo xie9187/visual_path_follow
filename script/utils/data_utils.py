@@ -89,7 +89,7 @@ def read_data_to_mem(data_path, max_step):
                                                                       time.time() - start_time)
     return data
     
-def get_a_batch(data, start, batch_size):
+def get_a_batch(data, start, batch_size, demo_sample_step):
     start_time = time.time()
     batch_demo_img_seq = []
     batch_demo_action_seq = []
@@ -107,8 +107,8 @@ def get_a_batch(data, start, batch_size):
         # img_seq_000_tm2 = np.concatenate([img_seq_0, img_seq_00_tm2], axis=0) # b, h, w, c
         # img_stack = np.concatenate([img_seq_0_t, img_seq_00_tm1, img_seq_000_tm2], axis=3) # b, h, w, 3*c
 
-        demo_img_seq = img_seq_0_t[::10, :, :, :]
-        demo_action_seq = action_seq[::10, :]
+        demo_img_seq = img_seq_0_t[::demo_sample_step, :, :, :]
+        demo_action_seq = action_seq[::demo_sample_step, :]
 
         batch_demo_img_seq.append(demo_img_seq)
         batch_demo_action_seq.append(demo_action_seq)

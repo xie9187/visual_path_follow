@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import random
+import csv
 import utils.data_utils as data_utils
 import utils.model_utils as model_utils
 import model.visual_memory as model_basic
@@ -25,7 +26,7 @@ flag.DEFINE_integer('dim_img_h', 64, 'input image height.')
 flag.DEFINE_integer('dim_img_w', 64, 'input image width.')
 flag.DEFINE_integer('dim_img_c', 3, 'input image channels.')
 flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
-flag.DEFINE_integer('demo_len', 4, 'length of demo.')
+flag.DEFINE_integer('demo_len', 40, 'length of demo.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 
@@ -47,6 +48,7 @@ def training(sess, model):
     data_valid = data[len(data)*9/10:]
 
     model_dir = os.path.join(flags.model_dir, flags.model_name)
+    eta_log_dir = os.path.join(model_dir, 'eta_log.csv')
     if not os.path.exists(model_dir): 
         os.makedirs(model_dir)
 
@@ -73,6 +75,10 @@ def training(sess, model):
         else:
             print 'model not found'
 
+    with open(eta_log_dir, 'w') as writeFile:
+        writer = csv.writer(writeFile)
+        writeFile.close()
+
     start_time = time.time()
     print 'start training'
     for epoch in range(flags.max_epoch):
@@ -82,7 +88,7 @@ def training(sess, model):
         random.shuffle(data_train)
         for step in xrange(batch_num):
             demo_img_seq, demo_action_seq, img_stack, action_seq = \
-                            data_utils.get_a_batch(data_train, step * flags.batch_size, flags.batch_size)
+                            data_utils.get_a_batch(data_train, step * flags.batch_size, flags.batch_size, flags.max_step/flags.demo_len)
             action_seq, eta_array, loss, _ = model.train(demo_img_seq, demo_action_seq, img_stack, action_seq)
             loss_list.append(loss)
         loss_train = np.mean(loss_list)
@@ -92,7 +98,7 @@ def training(sess, model):
         batch_num = len(data_valid) / flags.batch_size
         for step in xrange(batch_num):
             demo_img_seq, demo_action_seq, img_stack, action_seq = \
-                            data_utils.get_a_batch(data_valid, step * flags.batch_size, flags.batch_size)
+                            data_utils.get_a_batch(data_valid, step * flags.batch_size, flags.batch_size, flags.max_step/flags.demo_len)
             loss = model.valid(demo_img_seq, demo_action_seq, img_stack, action_seq)
             loss_list.append(loss)
         loss_valid = np.mean(loss_list)
@@ -106,7 +112,12 @@ def training(sess, model):
         summary = sess.run(merged)
         summary_writer.add_summary(summary, epoch)
 
-        if flags.save_model and (epoch+1)%5 == 0:
+        with open(eta_log_dir, 'a') as writeFile:
+            writer = csv.writer(writeFile)
+            writer.writerow(eta_array[0])
+            writeFile.close()
+
+        if flags.save_model and (epoch+1)%20 == 0:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
 
 def testing(sess, model):

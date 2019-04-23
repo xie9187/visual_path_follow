@@ -42,47 +42,41 @@ class visual_mem(object):
             self.input_img_test = tf.placeholder(tf.float32, shape=[None] + dim_img, name='input_img_test') #b,h,d,c
 
             # process demo seq
-            input_demo_img_transpose = tf.transpose(self.input_demo_img, perm=[1, 0, 2, 3, 4]) #l of demo,b,h,d,c
-            input_demo_a_transpose = tf.transpose(self.input_demo_a, perm=[1, 0, 2]) #l of demo,b
-            demo_img_list = tf.unstack(input_demo_img_transpose)
-            demo_a_list = tf.unstack(input_demo_a_transpose)
-            demo_feat_list = []
-            for demo_img, demo_a in zip(demo_img_list, demo_a_list):
-                # b,h,d,c
-                conv1 = model_utils.Conv2D(demo_img, 16, 3, 2, scope='conv1', max_pool=False)
-                conv2 = model_utils.Conv2D(conv1, 32, 3, 2, scope='conv2', max_pool=False)
-                conv3 = model_utils.Conv2D(conv2, 64, 3, 2, scope='conv3', max_pool=False)
-                conv4 = model_utils.Conv2D(conv3, 128, 3, 2, scope='conv4', max_pool=False)
-                conv5 = model_utils.Conv2D(conv4, 256, 3, 2, scope='conv5', max_pool=False)
-                shape = conv5.get_shape().as_list()
-                demo_img_vect = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b, -1
-                demo_vect = tf.concat([demo_img_vect, demo_a], axis=1) # b, -1
-                hidden1 = model_utils.DenseLayer(demo_img_vect, n_hidden, scope='dense1_demo') # b, n_hidden
-                demo_feat_list.append(model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_demo'))
+            input_demo_img_reshape = tf.reshape(self.input_demo_img, [-1] + dim_img)# b *l of demo,h,d,c
+            input_demo_a_reshape = tf.reshape(self.input_demo_a, [-1, dim_a]) #b * l of demo, 2
+            conv1 = model_utils.Conv2D(input_demo_img_reshape, 16, 3, 2, scope='conv1', max_pool=False)
+            conv2 = model_utils.Conv2D(conv1, 32, 3, 2, scope='conv2', max_pool=False)
+            conv3 = model_utils.Conv2D(conv2, 64, 3, 2, scope='conv3', max_pool=False)
+            conv4 = model_utils.Conv2D(conv3, 128, 3, 2, scope='conv4', max_pool=False)
+            conv5 = model_utils.Conv2D(conv4, 256, 3, 2, scope='conv5', max_pool=False)
+            shape = conv5.get_shape().as_list()
+            demo_img_vect = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) #b * l of demob, -1
+            demo_vect = tf.concat([demo_img_vect, input_demo_a_reshape], axis=1) #b * l of demo, -1
+            hidden1 = model_utils.DenseLayer(demo_vect, n_hidden, scope='dense1_demo')
+            demo_feat = model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_demo')  #b * l of demo, n_hidden
+            demo_feat_reshape = tf.reshape(demo_feat, [-1, demo_len, n_hidden]) #b, l of demo, n_hidden
+            demo_feat_list= tf.unstack(demo_feat_reshape, axis=1) # l of demo [b, n_hidden]
 
             # create gru cell
             gru_cell = model_utils._gru_cell(n_hidden, 1, name='gru_cell')
 
             # training
-            input_img_transpose = tf.transpose(self.input_img, perm=[1, 0, 2, 3, 4]) #l,b,h,d,c
-            img_list = tf.unstack(input_img_transpose)
-            img_feat_list = []
-            for img in img_list:
-                # b,h,d,c
-                conv1 = model_utils.Conv2D(img, 16, 3, 2, scope='conv1', max_pool=False)
-                conv2 = model_utils.Conv2D(conv1, 32, 3, 2, scope='conv2', max_pool=False)
-                conv3 = model_utils.Conv2D(conv2, 64, 3, 2, scope='conv3', max_pool=False)
-                conv4 = model_utils.Conv2D(conv3, 128, 3, 2, scope='conv4', max_pool=False)
-                conv5 = model_utils.Conv2D(conv4, 256, 3, 2, scope='conv5', max_pool=False)
-                shape = conv5.get_shape().as_list()
-                img_vect = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b, -1
-                hidden1 = model_utils.DenseLayer(img_vect, n_hidden, scope='dense1_img') # b, n_hidden
-                img_feat_list.append(model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_img'))
+            input_img_reshape = tf.reshape(self.input_img, [-1] + dim_img) #b * l, h, d, c
+            conv1 = model_utils.Conv2D(input_img_reshape, 16, 3, 2, scope='conv1', max_pool=False)
+            conv2 = model_utils.Conv2D(conv1, 32, 3, 2, scope='conv2', max_pool=False)
+            conv3 = model_utils.Conv2D(conv2, 64, 3, 2, scope='conv3', max_pool=False)
+            conv4 = model_utils.Conv2D(conv3, 128, 3, 2, scope='conv4', max_pool=False)
+            conv5 = model_utils.Conv2D(conv4, 256, 3, 2, scope='conv5', max_pool=False)
+            shape = conv5.get_shape().as_list()
+            img_vect = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b * l, -1
+            img_vect_reshape = tf.reshape(img_vect, [-1, max_step, shape[1]*shape[2]*shape[3]]) # b, l, -1
+            img_vect_list = tf.unstack(img_vect_reshape, axis=1) # l [b, n_hiddent]
+
             action_list = []
             eta = tf.identity(self.input_eta, name='init_eta')
             eta_list = []
             gru_h_in = self.gru_h_in
-            for t, img_feat in enumerate(img_feat_list):
+            for t, img_vect in enumerate(img_vect_list):
                 mu_t_list = []
                 for j, demo_feat in enumerate(demo_feat_list):
                     w_j = tf.exp(-tf.abs(eta - j)) #b 
@@ -90,7 +84,7 @@ class visual_mem(object):
                     w_j_tile = tf.tile(w_j_expand, multiples=[1, n_hidden]) #b, n_hidden
                     mu_t_list.append(demo_feat * w_j_tile)
                 mu_t = tf.add_n(mu_t_list)
-                input_t = tf.concat([mu_t, img_feat], axis=1) #b, n_hidden*2
+                input_t = tf.concat([mu_t, img_vect], axis=1) #b, n_hidden + dim of img vect
                 gru_output, self.gru_h_out = gru_cell(input_t, gru_h_in)
                 gru_h_in = self.gru_h_out
                 increment = 1. + model_utils.DenseLayer(gru_output, 1, activation=tf.nn.tanh, scope='dense_increment') #b, 1
@@ -116,8 +110,6 @@ class visual_mem(object):
             conv5 = model_utils.Conv2D(conv4, 256, 3, 2, scope='conv5', max_pool=False)
             shape = conv5.get_shape().as_list()
             img_vect = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b, -1
-            hidden1 = model_utils.DenseLayer(img_vect, n_hidden, scope='dense1_img') # b, n_hidden
-            img_feat = model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_img')
             eta = tf.identity(self.input_eta, name='eta_in')
             gru_h_in = self.gru_h_in
             mu_t_list = []
@@ -127,7 +119,7 @@ class visual_mem(object):
                 w_j_tile = tf.tile(w_j_expand, multiples=[1, n_hidden]) #b, n_hidden
                 mu_t_list.append(demo_feat * w_j_tile)
             mu_t = tf.add_n(mu_t_list)
-            input_t = tf.concat([mu_t, img_feat], axis=1) #b, n_hidden*2
+            input_t = tf.concat([mu_t, img_vect], axis=1) #b, n_hidden*2
             gru_output, self.gru_h_out = gru_cell(input_t, gru_h_in)
             gru_h_in = self.gru_h_out
             increment = 1. + model_utils.DenseLayer(gru_output, 1, activation=tf.nn.tanh, scope='dense_increment') #b, 1
