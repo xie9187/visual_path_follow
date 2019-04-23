@@ -82,7 +82,7 @@ def training(sess, model):
         random.shuffle(data_train)
         for step in xrange(batch_num):
             demo_img_seq, demo_action_seq, img_stack, action_seq = \
-                            data_utils.get_a_batch(data_train, step * flags.batch_size, flags.batch_size)
+                            data_utils.get_a_batch(data_train, step * flags.batch_size, flags.batch_size, flags.max_step/flags.demo_len)
             action_seq, eta_array, loss, _ = model.train(demo_img_seq, demo_action_seq, img_stack, action_seq)
             loss_list.append(loss)
         loss_train = np.mean(loss_list)
@@ -92,7 +92,7 @@ def training(sess, model):
         batch_num = len(data_valid) / flags.batch_size
         for step in xrange(batch_num):
             demo_img_seq, demo_action_seq, img_stack, action_seq = \
-                            data_utils.get_a_batch(data_valid, step * flags.batch_size, flags.batch_size)
+                            data_utils.get_a_batch(data_valid, step * flags.batch_size, flags.batch_size, flags.max_step/flags.demo_len)
             loss = model.valid(demo_img_seq, demo_action_seq, img_stack, action_seq)
             loss_list.append(loss)
         loss_valid = np.mean(loss_list)
