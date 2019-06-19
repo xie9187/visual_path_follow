@@ -81,6 +81,7 @@ class GazeboWorld():
         self.resized_rgb_img = rospy.Publisher(robot_name+'/camera/rgb/image_resized',Image, queue_size = 10)
         self.pose_GT_pub = rospy.Publisher(robot_name+'/base_pose_ground_truth',Odometry, queue_size = 10)
         self.dynamic_path_pub = rospy.Publisher(robot_name+'/dynamic_path', Path, queue_size=5)
+        self.demo_rgb_img_pub = rospy.Publisher(robot_name+'/camera/rgb/demo',Image, queue_size = 10)
 
         self.object_state_sub = rospy.Subscriber('gazebo/model_states', ModelStates, self.ModelStateCallBack)
         self.laser_sub = rospy.Subscriber('mybot/laser/scan', LaserScan, self.LaserScanCallBack)
@@ -189,7 +190,7 @@ class GazeboWorld():
         except Exception as e:
             raise e
         self.resized_depth_img.publish(resized_img)
-        return(cv_img/5.)
+        return cv_img/5.
 
     def GetRGBImageObservation(self):
         # ros image to cv2 image
@@ -206,7 +207,20 @@ class GazeboWorld():
         except Exception as e:
             raise e
         self.resized_rgb_img.publish(resized_img)
-        return(cv_resized_img)
+        return cv_resized_img
+
+    def PublishDemoRGBImage(self, image_arr, demo_idx):
+        # cv2 image to ros image and publish
+        width, height, channel = image_arr.shape
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(image_arr,str(demo_idx),(width/10*4,height/10*9), 
+                    font, 0.5,(255,255,255),1,cv2.LINE_AA)
+        try:
+            image = self.bridge.cv2_to_imgmsg(image_arr, "bgr8")
+        except Exception as e:
+            raise e
+        self.demo_rgb_img_pub.publish(image)
+
 
     def GetSelfState(self):
         return copy.deepcopy(self.state)
@@ -341,7 +355,7 @@ class GazeboWorld():
         self.cmd_vel.publish(Twist())
         rospy.sleep(1)
 
-    def GetRewardAndTerminate(self, t, delta=None):
+    def GetRewardAndTerminate(self, t, delta=None, max_step=100):
         terminate = False
         reset = False
         laser_scan = self.GetLaserObservation()
@@ -384,8 +398,9 @@ class GazeboWorld():
                 print 'crash'
                 result = 3
                 reward = -1.
-            if t >= 100:
+            if t >= max_step:
                 result = 2
+                terminate = True
                 print 'time out'
             if self.movement_counter >= 10:
                 terminate = True

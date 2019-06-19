@@ -92,7 +92,7 @@ class visual_mem(object):
                 eta = tf.identity(eta + increment, name='eta_{}'.format(t))
                 eta_list.append(eta)
                 action_linear = model_utils.DenseLayer(gru_output, dim_a/2, activation=tf.nn.sigmoid, scope='dense_a_linear') * action_range[0] #b,1
-                action_angular = model_utils.DenseLayer(gru_output, dim_a/2, activation=tf.nn.tanh, scope='dense_a_angular') * action_range[1] #b,1
+                action_angular = model_utils.DenseLayer(gru_output, dim_a/2, activation=tf.nn.tanh, scope='dense_a_angular') * action_range[1] #b,1      
                 action_list.append(tf.concat([action_linear, action_angular], axis=1)) #l[b,2]
             self.action_seq = tf.stack(action_list, axis=1) #b, l, 2
             self.eta_array = tf.stack(eta_list, axis=1) #b, l

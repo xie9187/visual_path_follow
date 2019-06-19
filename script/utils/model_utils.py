@@ -166,6 +166,68 @@ def DenseLayer(inputs,
                                                 )    
     return outputs
 
+def reinforce(x, reward, n_hidden=500, scope=None):
+
+  with tf.variable_scope(scope or 'REINFORCE_layer'):
+    # important: stop the gradients
+    x = tf.stop_gradient(x)
+    reward = tf.stop_gradient(reward)
+    # baseline: central
+    # init = tf.constant(2.9428)
+    init = tf.constant(0.)
+    baseline_c = tf.get_variable('baseline_c', initializer=init)
+    # baseline: data dependent
+    baseline_x = (linear(
+        tf.sigmoid(
+            linear(
+                tf.sigmoid(linear(
+                    x, n_hidden, True, scope='l1')),
+                n_hidden,
+                True,
+                scope='l2')),
+            1,
+            True,
+            scope='l3'))
+
+    reward = reward - baseline_c - baseline_x
+    # reward = reward - baseline_x
+
+    return reward
+
+def linear(inputs,
+            output_size,
+            bias,
+            bias_start_zero=False,
+            matrix_start_zero=False,
+            scope=None):
+  """Define a linear connection that can customise the parameters."""
+
+  shape = inputs.get_shape().as_list()
+
+  if len(shape) != 2:
+    raise ValueError('Linear is expecting 2D arguments: %s' % str(shape))
+  if not shape[1]:
+    raise ValueError('Linear expects shape[1] of arguments: %s' % str(shape))
+  input_size = shape[1]
+
+  # Now the computation.
+  with tf.variable_scope(scope or 'Linear'):
+    if matrix_start_zero:
+      matrix = tf.get_variable(
+          'Matrix', [input_size, output_size],
+          initializer=tf.constant_initializer(0))
+    else:
+      matrix = tf.get_variable('Matrix', [input_size, output_size])
+    res = tf.matmul(inputs, matrix)
+    if not bias:
+      return res
+    if bias_start_zero:
+      bias_term = tf.get_variable(
+          'Bias', [output_size], initializer=tf.constant_initializer(0))
+    else:
+      bias_term = tf.get_variable('Bias', [output_size])
+  return res + bias_term
+
 def variable_summaries(var):
     """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
     with tf.name_scope('summaries'):

@@ -7,6 +7,8 @@ import time
 import sys
 import cv2
 import matplotlib.pyplot as plt
+import matplotlib.transforms as mtrans
+
 
 CWD = os.getcwd()
 
@@ -71,7 +73,7 @@ def read_data_to_mem(data_path, max_step):
         img_seq_path = file_path_number + '_image'
         img_file_list = os.listdir(img_seq_path)
         img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
-        # 
+        
         if len(img_file_list) < max_step:
             print 'img num incorrect'
             break
@@ -89,36 +91,154 @@ def read_data_to_mem(data_path, max_step):
                                                                       time.time() - start_time)
     return data
     
-def get_a_batch(data, start, batch_size, demo_sample_step):
+def get_a_batch(data, start, batch_size, demo_length):
     start_time = time.time()
     batch_demo_img_seq = []
     batch_demo_action_seq = []
     batch_img_seq = []
     batch_action_seq = []
+    batch_demo_indicies = []
     for i in xrange(batch_size):
         idx = start + i
         action_seq = data[idx][1]
-        img_seq_0_t = data[idx][0].astype(np.float32) # b, h, w, c
-        # img_0 = img_seq_0_t[0, :, :, :] # h, w, c
-        # img_seq_0 = np.expand_dims(img_0, axis=0) # 1, h, w, c
-        # img_seq_0_tm1 = img_seq_0_t[:-1, :, :, :] # b-1, h, w, c
-        # img_seq_00_tm1 = np.concatenate([img_seq_0, img_seq_0_tm1], axis=0) # b, h, w, c
-        # img_seq_00_tm2 = img_seq_00_tm1[:-1, :, :, :] # b-1, h, w, c
-        # img_seq_000_tm2 = np.concatenate([img_seq_0, img_seq_00_tm2], axis=0) # b, h, w, c
-        # img_stack = np.concatenate([img_seq_0_t, img_seq_00_tm1, img_seq_000_tm2], axis=3) # b, h, w, 3*c
-
-        demo_img_seq = img_seq_0_t[::demo_sample_step, :, :, :]
-        demo_action_seq = action_seq[::demo_sample_step, :]
+        img_seq_0_t = data[idx][0].astype(np.float32)/255. # l, h, w, c
+        demo_indicies = []
+        sec_start = 0
+        sec_len = len(img_seq_0_t)/demo_length
+        for section in range(demo_length-1):
+            demo_indicies.append(np.random.randint(sec_start, sec_start+sec_len))
+            sec_start += sec_len
+        demo_indicies.append(len(img_seq_0_t)-1)
+        demo_img_seq = img_seq_0_t[demo_indicies, :, :, :]
+        demo_action_seq = action_seq[demo_indicies, :]
 
         batch_demo_img_seq.append(demo_img_seq)
         batch_demo_action_seq.append(demo_action_seq)
         batch_img_seq.append(img_seq_0_t)
         batch_action_seq.append(action_seq)
+        batch_demo_indicies.append(demo_indicies)
 
     batch = [batch_demo_img_seq, batch_demo_action_seq, batch_img_seq, batch_action_seq]
     # print 'sampled a batch in {:.1f}s '.format(time.time() - start_time)  
-    return batch_demo_img_seq, batch_demo_action_seq, batch_img_seq, batch_action_seq
+    return batch_demo_img_seq, batch_demo_action_seq, batch_img_seq, batch_action_seq, batch_demo_indicies
+
+def get_file_path_number_list(data_path_list):
+    file_path_number_list = []
+    for data_path in data_path_list:
+        nums = []
+        file_list = os.listdir(data_path)
+        print 'Loading from '+data_path
+        for file_name in file_list:
+            if 'action' in file_name:
+                nums.append(int(file_name[:file_name.find('_')]))
+        nums = np.sort(nums).tolist()
+        for num in nums:
+            file_path_number_list.append(data_path+'/'+str(num))
+        print 'Found {} sequences!!'.format(len(file_path_number_list))
+    return file_path_number_list
+
+def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, demo_len):
+    end = start
+    data = []
+    start_time = time.time()
+    while len(data) < batch_size:
+        file_path_number = file_path_number_list[end]
+        end += 1
+        # a sequence
+        action_file_name = file_path_number + '_action.csv'
+        action_seq = np.reshape(read_csv_file(action_file_name), [-1, 2])
+        if len(action_seq) < max_step:
+            print 'acttion num incorrect'
+            break
+        elif len(action_seq) > max_step:
+            action_seq = action_seq[:max_step, :]
+
+        img_seq_path = file_path_number + '_image'
+        img_file_list = os.listdir(img_seq_path)
+        img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
+
+        if len(img_file_list) < max_step:
+            print 'img num incorrect'
+            break
+        elif len(img_file_list) > max_step:
+            img_file_list = img_file_list[:max_step]
+        img_list = []
+        for img_file_name in img_file_list:
+            img_file_path = os.path.join(img_seq_path, img_file_name)
+            img = read_img_file(img_file_path)
+            img_list.append(img)
+        img_seq = np.stack(img_list, axis=0)
+        data.append([img_seq, action_seq])
+        if end == len(file_path_number_list):
+            return None, None, True
+    read_time = time.time() - start_time
+
+    batch_data = get_a_batch(data, 0, batch_size, demo_len)
+    process_time = time.time() - start_time - read_time
+
+    # print 'read time: {:.2f}s, process time: {:.2f}s '.format(read_time, process_time)  
+
+    return batch_data, end, False
+
+
+def direction_arrow(ax, xy, deg):
+    m1 = np.array( (-1, 1) )
+    m2 = np.array( (0, 1) )
+    s1 = np.array( (0.5, 1.8) )
+    s2 = np.array( (20, 50) )
+    xy = np.array(xy)
+    rot = mtrans.Affine2D().rotate_deg(deg)
+    #Wind Direction Arrow
+    cncs = "angle3,angleA={},angleB={}".format(deg,deg+90)
+    kw = dict(xycoords='data',textcoords='offset points',size=20,
+              arrowprops=dict(arrowstyle="fancy", fc="0.6", ec="none",
+                              connectionstyle=cncs))
+    ax.annotate('', xy=xy + rot.transform_point(m2*s1), 
+                    xytext=rot.transform_point(m2*s2), **kw)
+    
+def write_csv(data, file_path):
+    file = open(file_path, 'w')
+    writer = csv.writer(file, delimiter=',', quotechar='|')
+    for row in data:
+        if not isinstance(row, list):
+            row = [row]
+        writer.writerow(row)
 
 if __name__ == '__main__':
-    data = read_data_to_mem(os.path.join(CWD[:-19], 'vpf_data/linhai-AW-15-R3'), 100)
-    batch_data = get_a_batch(data, 0, 8)
+    batch_size = 16
+    demo_len = 20
+    max_step = 100
+    pos = 0
+    # data = read_data_to_mem('/mnt/Work/catkin_ws/data/vpf_data/test', 100)
+    # batch_data = get_a_batch(data, 0, batch_size, demo_len)
+
+    file_path_number_list = get_file_path_number_list(['/mnt/Work/catkin_ws/data/vpf_data/test'])
+    batch_data, pos, end_flag = read_a_batch_to_mem(file_path_number_list, pos, batch_size, max_step, demo_len)
+
+    seq_no = np.random.randint(batch_size)
+    img_seq = batch_data[2][seq_no]
+    a_seq = batch_data[3][seq_no]
+    demo_img_seq = batch_data[0][seq_no]
+    demo_indicies = batch_data[4][seq_no]
+    fig, ax = plt.subplots(1, 2)
+    x1=30
+    y1=50
+    print 'demo_indicies: ', demo_indicies
+    demo_idx = 0
+
+    for t in xrange(len(img_seq)):
+        ax[0].cla()
+        ax[0].imshow(img_seq[t])
+        deg = a_seq[t][1] / np.pi * 180
+        direction_arrow(ax[0], (x1, y1), deg+180)
+        ax[0].set(xlabel='img obs {}'.format(t))
+
+        ax[1].cla()
+        ax[1].imshow(demo_img_seq[demo_idx])
+        ax[1].set_aspect('equal', 'box')
+        ax[1].set(xlabel='img demo {}'.format(demo_idx))
+
+        if t in demo_indicies:
+            demo_idx += 1
+
+        plt.pause(0.1)

@@ -33,23 +33,31 @@ class Actor(object):
 
         with tf.variable_scope('actor'):
             # training input
-            self.input_demo_img = tf.placeholder(tf.float32, shape=[None, demo_len] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
-            self.input_demo_a = tf.placeholder(tf.float32, shape=[None, demo_len, dim_a], name='input_demo_a') #b,l of demo,2
+            self.input_demo_img = tf.placeholder(tf.float32, 
+                                                 shape=[None, demo_len] + dim_img, 
+                                                 name='input_demo_img') #b,l of demo,h,d,c
+            self.input_demo_a = tf.placeholder(tf.float32, 
+                                               shape=[None, demo_len, dim_a], 
+                                               name='input_demo_a') #b,l of demo,2
             self.input_eta = tf.placeholder(tf.float32, shape=[None], name='input_eta') #b
             
-            self.input_img = tf.placeholder(tf.float32, shape=[None, max_step, dim_img[0], dim_img[1], dim_img[2]], name='input_img') #b,l,h,d,c
-            self.gru_h_in = tf.placeholder(tf.float32, shape=[None, n_hidden], name='gru_h_in') #b,n_hidden
+            self.input_img = tf.placeholder(tf.float32, 
+                                            shape=[None, max_step, dim_img[0], dim_img[1], dim_img[2]], 
+                                            name='input_img') #b,l,h,d,c
+            self.gru_h_in = tf.placeholder(tf.float32, 
+                                           shape=[None, n_hidden], 
+                                           name='gru_h_in') #b,n_hidden
 
             # testing input
-            self.input_img_test = tf.placeholder(tf.float32, shape=[None] + dim_img, name='input_img_test') #b,h,d,c
+            self.input_img_test = tf.placeholder(tf.float32, 
+                                                 shape=[None] + dim_img, 
+                                                 name='input_img_test') #b,h,d,c
 
             inputs = [self.input_demo_img, 
                       self.input_demo_a, 
                       self.input_eta,
-                      self.input_cmd_skip,
-                      self.prev_action,
-                      self.input_obj_goal,
-                      self.prev_state_2]
+                      self.input_img,
+                      self.gru_h_in]
 
             with tf.variable_scope('online'):
                 self.pred_action, self.logits, self.state_2 = self.Model(inputs)
@@ -86,36 +94,56 @@ class Actor(object):
 
 
     def Model(self, inputs):
-        laser, cmd, cmd_next, cmd_skip, prev_action, obj_goal, prev_state_2 = inputs
-        with tf.variable_scope('encoder'):
-            embedding_w_goal = tf.get_variable('embedding_w_goal', [self.dim_action, self.dim_emb])
-            embedding_b_goal = tf.get_variable('embedding_b_goal', [self.dim_emb])
-            embedding_status = tf.get_variable('embedding_status', [self.n_cmd_type**2, self.dim_emb])
-            embedding_w_action = tf.get_variable('embedding_w_action', [self.dim_action, self.dim_emb])
-            embedding_b_action = tf.get_variable('embedding_b_action', [self.dim_emb])
-            embedding_w_status = tf.get_variable('embedding_w_status', [self.dim_cmd, self.dim_emb])
-            embedding_b_status = tf.get_variable('embedding_b_status', [self.dim_emb])
-            
-            # training input
-            conv1 = model_utils.Conv1D(laser, 2, 5, 4, scope='conv1')
-            conv2 = model_utils.Conv1D(conv1, 4, 5, 4, scope='conv2')
-            conv3 = model_utils.Conv1D(conv2, 8, 5, 4, scope='conv3')
-            shape = conv3.get_shape().as_list()
-            vector_laser = tf.reshape(conv3, (-1, shape[1]*shape[2]))
+        input_demo_img, input_demo_a, input_eta, input_img, gru_h_in = inputs
 
-            curr_status = cmd * self.n_cmd_type + cmd_next
-            next_status = cmd_next * self.n_cmd_type + cmd_skip
-            vector_curr_status = tf.reshape(tf.nn.embedding_lookup(embedding_status, curr_status), (-1, self.dim_emb))
+        # process demo seq
+        input_demo_img_reshape = tf.reshape(input_demo_img, [-1] + dim_img)# b *l of demo,h,d,c
+        input_demo_a_reshape = tf.reshape(input_demo_a, [-1, dim_a]) #b * l of demo, 2
+        conv1 = model_utils.Conv2D(input_demo_img_reshape, 16, 3, 2, scope='conv1', max_pool=False)
+        conv2 = model_utils.Conv2D(conv1, 32, 3, 2, scope='conv2', max_pool=False)
+        conv3 = model_utils.Conv2D(conv2, 64, 3, 2, scope='conv3', max_pool=False)
+        conv4 = model_utils.Conv2D(conv3, 128, 3, 2, scope='conv4', max_pool=False)
+        conv5 = model_utils.Conv2D(conv4, 256, 3, 2, scope='conv5', max_pool=False)
+        shape = conv5.get_shape().as_list()
+        demo_img_vect = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) #b * l of demob, -1
+        demo_vect = tf.concat([demo_img_vect, input_demo_a_reshape], axis=1) #b * l of demo, -1
+        hidden1 = model_utils.DenseLayer(demo_vect, n_hidden, scope='dense1_demo')
+        demo_feat = model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_demo')  #b * l of demo, n_hidden
+        demo_feat_reshape = tf.reshape(demo_feat, [-1, demo_len, n_hidden]) #b, l of demo, n_hidden
+        demo_feat_list= tf.unstack(demo_feat_reshape, axis=1) # l of demo [b, n_hidden]
 
-            vector_prev_action = tf.matmul(prev_action, embedding_w_action) + embedding_b_action
 
-            vector_obj_goal = tf.matmul(obj_goal, embedding_w_goal) + embedding_b_goal
+        # create gru cell
+        gru_cell = model_utils._gru_cell(n_hidden, 1, name='gru_cell')
 
-            input_vector = tf.concat([vector_laser, 
-                                      vector_curr_status,
-                                      vector_prev_action,
-                                      vector_obj_goal], 
-                                      axis=1)
+
+        # training
+        input_img_reshape = tf.reshape(input_img, [-1] + dim_img) #b * l, h, d, c
+        conv1 = model_utils.Conv2D(input_img_reshape, 16, 3, 2, scope='conv1', max_pool=False)
+        conv2 = model_utils.Conv2D(conv1, 32, 3, 2, scope='conv2', max_pool=False)
+        conv3 = model_utils.Conv2D(conv2, 64, 3, 2, scope='conv3', max_pool=False)
+        conv4 = model_utils.Conv2D(conv3, 128, 3, 2, scope='conv4', max_pool=False)
+        conv5 = model_utils.Conv2D(conv4, 256, 3, 2, scope='conv5', max_pool=False)
+        shape = conv5.get_shape().as_list()
+        img_vect = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b * l, -1
+        img_vect_reshape = tf.reshape(img_vect, [-1, max_step, shape[1]*shape[2]*shape[3]]) # b, l, -1
+        img_vect_list = tf.unstack(img_vect_reshape, axis=1) # l [b, n_hiddent]
+
+
+
+        curr_status = cmd * self.n_cmd_type + cmd_next
+        next_status = cmd_next * self.n_cmd_type + cmd_skip
+        vector_curr_status = tf.reshape(tf.nn.embedding_lookup(embedding_status, curr_status), (-1, self.dim_emb))
+
+        vector_prev_action = tf.matmul(prev_action, embedding_w_action) + embedding_b_action
+
+        vector_obj_goal = tf.matmul(obj_goal, embedding_w_goal) + embedding_b_goal
+
+        input_vector = tf.concat([vector_laser, 
+                                  vector_curr_status,
+                                  vector_prev_action,
+                                  vector_obj_goal], 
+                                  axis=1)
 
         with tf.variable_scope('controller'):
             shape = input_vector.get_shape().as_list()

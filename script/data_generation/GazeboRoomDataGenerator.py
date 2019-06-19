@@ -301,10 +301,9 @@ def DataGenerate(data_path, robot_name='robot1'):
             terminal, result, reward = env.GetRewardAndTerminate(t)
             total_reward += reward
 
-            if t > 0:
-                # log data
-                rgb_image_save.append(rgb_image)
-                action_save.append(action.tolist())
+            # log data
+            rgb_image_save.append(rgb_image)
+            action_save.append(action.tolist())
 
             if result == 1 or result == 2:
                 Data = [action_save]
