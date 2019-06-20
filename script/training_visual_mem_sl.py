@@ -23,14 +23,14 @@ flag = tf.app.flags
 # network param
 flag.DEFINE_integer('batch_size', 16, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
-flag.DEFINE_integer('max_step', 80, 'max step.')
+flag.DEFINE_integer('max_step', 100, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
 flag.DEFINE_integer('dim_img_h', 64, 'input image height.')
 flag.DEFINE_integer('dim_img_w', 64, 'input image width.')
 flag.DEFINE_integer('dim_img_c', 3, 'input image channels.')
 flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
-flag.DEFINE_integer('demo_len', 20, 'length of demo.')
+flag.DEFINE_integer('demo_len', 25, 'length of demo.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 
@@ -204,7 +204,7 @@ def testing(sess, model):
             eta = np.zeros([1], np.float32)
             gru_h = np.zeros([1, flags.n_hidden], np.float32)
         else:
-            if result != 2:
+            if result > 2:
                 continue
 
         env.SetObjectPose('robot1', [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
@@ -227,7 +227,7 @@ def testing(sess, model):
         terminal = False
         
         while not rospy.is_shutdown():
-            start_time = time.time()
+            
 
             terminal, result, reward = env.GetRewardAndTerminate(t, max_step=flags.max_step)
             total_reward += reward
@@ -253,33 +253,43 @@ def testing(sess, model):
                     demo_a_buf.append(action)
                     env.PublishDemoRGBImage(rgb_image, len(demo_a_buf)-1)
             else:
-                action, eta, gru_h = model.predict([demo_img_buf], [demo_a_buf], eta, [rgb_image/255.], gru_h)
+                start_time = time.time()
+                action, eta, gru_h = model.predict(demo_img_buf, demo_a_buf, eta[0], [rgb_image/255.], gru_h)
+                loop_time.append(time.time() - start_time)
                 action = action[0]
                 demo_idx = min(int(round(eta[0])), len(demo_img_buf)-1)
                 demo_img_pub = np.asarray(demo_img_buf[demo_idx]*255., dtype=np.uint8)
                 env.PublishDemoRGBImage(demo_img_pub, demo_idx)
+                
 
             env.SelfControl(action, [0.3, np.pi/6])
 
             t += 1
             T += 1
-            loop_time.append(time.time() - start_time)
+            
 
             rate.sleep()
             # print '{:.4f}'.format(time.time() - start_time)
-
-        print 'Episode:{:} | Steps:{:} | Reward:{:.2f} | T:{:} | Demo: {:}'.format(episode, 
-                                  t, 
-                                  total_reward, 
-                                  T,
-                                  demo_flag)
+        if demo_flag:
+            print 'Episode:{:} | Steps:{:} | Reward:{:.2f} | T:{:} | Demo: {:}'.format(episode, 
+                                                                t, 
+                                                                total_reward, 
+                                                                T,
+                                                                demo_flag)   
+        else:
+            print 'Episode:{:} | Steps:{:} | Reward:{:.2f} | T:{:} | Demo: {:}, | PredTime: {:.4f}'.format(episode, 
+                                                                t, 
+                                                                total_reward, 
+                                                                T,
+                                                                demo_flag,
+                                                                np.mean(loop_time))
         episode += 1
         demo_flag = not demo_flag
 
 
 def main():
-    config = tf.ConfigProto(allow_soft_placement=True)
-    # config.gpu_options.allow_growth = True
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
         model = model_basic.visual_mem(sess=sess,
                                       batch_size=flags.batch_size,
@@ -290,7 +300,8 @@ def main():
                                       dim_a=flags.dim_a,
                                       dim_img=[flags.dim_img_h, flags.dim_img_w, flags.dim_img_c],
                                       action_range=[flags.a_linear_range, flags.a_angular_range],
-                                      learning_rate=flags.learning_rate)
+                                      learning_rate=flags.learning_rate,
+                                      test_only=flags.test)
         if not flags.test:
             training(sess, model)
         else:
