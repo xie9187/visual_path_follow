@@ -12,6 +12,37 @@ import matplotlib.transforms as mtrans
 
 CWD = os.getcwd()
 
+class data_buffer(object):
+    """docstring for replay_buffer"""
+    def __init__(self, size):
+        self.data = []
+        self.size = size
+
+    def save_sample(self, img_seq, action_seq, demo_img_seq, demo_a_seq):
+        self.data.append([np.asarray(img_seq), 
+                          np.asarray(action_seq), 
+                          np.asarray(demo_img_seq), 
+                          np.asarray(demo_a_seq)])
+        if len(self.data) > self.size:
+            self.data = self.data[1:]
+
+    def sample_a_batch(self, batch_size):
+        batch_demo_img_seq = []
+        batch_demo_action_seq = []
+        batch_img_seq = []
+        batch_action_seq = []
+        if len(self.data) >= batch_size:
+            indicies = random.sample(range(len(self.data)), batch_size)
+            for idx in indicies:
+                batch_img_seq.append(self.data[idx][0].astype(np.float32)/255.)
+                batch_action_seq.append(self.data[idx][1])
+                batch_demo_img_seq.append(self.data[idx][2].astype(np.float32)/255.)
+                batch_demo_action_seq.append(self.data[idx][3])     
+        else:
+            print 'no enough samples'
+
+        return [batch_img_seq, batch_action_seq, batch_demo_img_seq, batch_demo_action_seq]
+
 def get_size(obj, seen=None):
     """Recursively finds size of objects"""
     size = sys.getsizeof(obj)
@@ -91,7 +122,7 @@ def read_data_to_mem(data_path, max_step):
                                                                       time.time() - start_time)
     return data
     
-def get_a_batch(data, start, batch_size, demo_length):
+def get_a_batch(data, start, batch_size, demo_length, interval_mode='random'):
     start_time = time.time()
     batch_demo_img_seq = []
     batch_demo_action_seq = []
@@ -102,12 +133,19 @@ def get_a_batch(data, start, batch_size, demo_length):
         idx = start + i
         action_seq = data[idx][1]
         img_seq_0_t = data[idx][0].astype(np.float32)/255. # l, h, w, c
-        demo_indicies = []
-        sec_start = 0
-        sec_len = len(img_seq_0_t)/demo_length
-        for section in range(demo_length-1):
-            demo_indicies.append(np.random.randint(sec_start, sec_start+sec_len))
-            sec_start += sec_len
+        if interval_mode == 'random':
+            demo_indicies = random.sample(range(len(img_seq_0_t)-1), demo_length-1)
+            demo_indicies.sort()
+        else:
+            demo_indicies = []
+            sec_start = 0
+            sec_len = len(img_seq_0_t)/demo_length
+            for section in range(demo_length-1):
+                if interval_mode == 'semi_random':
+                    demo_indicies.append(np.random.randint(sec_start, sec_start+sec_len))
+                elif interval_mode == 'fixed':
+                    demo_indicies.append(sec_start+sec_len-1)
+                sec_start += sec_len
         demo_indicies.append(len(img_seq_0_t)-1)
         demo_img_seq = img_seq_0_t[demo_indicies, :, :, :]
         demo_action_seq = action_seq[demo_indicies, :]
@@ -118,7 +156,6 @@ def get_a_batch(data, start, batch_size, demo_length):
         batch_action_seq.append(action_seq)
         batch_demo_indicies.append(demo_indicies)
 
-    batch = [batch_demo_img_seq, batch_demo_action_seq, batch_img_seq, batch_action_seq]
     # print 'sampled a batch in {:.1f}s '.format(time.time() - start_time)  
     return batch_demo_img_seq, batch_demo_action_seq, batch_img_seq, batch_action_seq, batch_demo_indicies
 
@@ -137,7 +174,7 @@ def get_file_path_number_list(data_path_list):
         print 'Found {} sequences!!'.format(len(file_path_number_list))
     return file_path_number_list
 
-def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, demo_len):
+def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, demo_len, mode='random'):
     end = start
     data = []
     start_time = time.time()
@@ -173,7 +210,7 @@ def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, demo
             return None, None, True
     read_time = time.time() - start_time
 
-    batch_data = get_a_batch(data, 0, batch_size, demo_len)
+    batch_data = get_a_batch(data, 0, batch_size, demo_len, mode)
     process_time = time.time() - start_time - read_time
 
     # print 'read time: {:.2f}s, process time: {:.2f}s '.format(read_time, process_time)  
@@ -242,3 +279,6 @@ if __name__ == '__main__':
             demo_idx += 1
 
         plt.pause(0.1)
+
+
+            

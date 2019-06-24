@@ -17,7 +17,8 @@ class visual_mem(object):
                  dim_img=[64, 64, 3],
                  action_range=[0.3, np.pi/6],
                  learning_rate=1e-3,
-                 test_only=False):
+                 test_only=False,
+                 use_demo_action=True):
         self.sess = sess
         self.batch_size = batch_size
         self.max_step = max_step
@@ -55,7 +56,10 @@ class visual_mem(object):
                 input_demo_img_reshape = tf.reshape(self.input_demo_img, [-1] + dim_img)# b *l of demo,h,d,c
                 input_demo_a_reshape = tf.reshape(self.input_demo_a, [-1, dim_a]) #b * l of demo, 2
                 demo_img_vect = self.encode_image(input_demo_img_reshape) #b * l of demob, -1
-                demo_vect = tf.concat([demo_img_vect, input_demo_a_reshape], axis=1) #b * l of demo, -1
+                if use_demo_action:
+                    demo_vect = tf.concat([demo_img_vect, input_demo_a_reshape], axis=1) #b * l of demo, -1
+                else:
+                    demo_vect = demo_img_vect
                 hidden1 = model_utils.DenseLayer(demo_vect, n_hidden, scope='dense1_demo')
                 demo_feat = model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_demo')  #b * l of demo, n_hidden
                 demo_feat_reshape = tf.reshape(demo_feat, [-1, demo_len, n_hidden]) #b, l of demo, n_hidden
@@ -100,7 +104,10 @@ class visual_mem(object):
             # testing
             # process demo seq
             demo_img_vect = self.encode_image(self.input_demo_img_test,) # l of demob, -1
-            demo_vect = tf.concat([demo_img_vect, self.input_demo_a_test], axis=1) # l of demo, -1
+            if use_demo_action:
+                demo_vect = tf.concat([demo_img_vect, self.input_demo_a_test], axis=1) # l of demo, -1
+            else:
+                demo_vect = demo_img_vect
             hidden1 = model_utils.DenseLayer(demo_vect, n_hidden, scope='dense1_demo')
             demo_feat = model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_demo')  # l of demo, n_hidden
 

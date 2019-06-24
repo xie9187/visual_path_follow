@@ -52,7 +52,7 @@ class GazeboWorld():
         self.laser_cb_num = 0
 
         self.robot_size = 0.5
-        self.target_size = 0.55
+        self.target_size = 0.1
         self.target_theta_range = np.pi/3
 
         #-----------Default Robot State-----------------------
@@ -387,27 +387,26 @@ class GazeboWorld():
                 delta = self.pre_distance - self.distance
         reward = delta * np.cos(w) - 0.01
 
+        if self.stop_counter == 2:
+            terminate = True
+            # print 'crash'
+            result = 3
+            reward = -1.
+        if self.movement_counter >= 10:
+            terminate = True
+            # print 'stuck'
+            result = 4
+            reward = -1.
+            self.movement_counter = 0
         if self.distance < self.target_size:
             terminate = True
             result = 1
-            print 'reach the goal'
+            # print 'reach the goal'
             reward = 1.
-        else:
-            if self.stop_counter == 2:
-                terminate = True
-                print 'crash'
-                result = 3
-                reward = -1.
-            if t >= max_step:
-                result = 2
-                terminate = True
-                print 'time out'
-            if self.movement_counter >= 10:
-                terminate = True
-                print 'stuck'
-                result = 4
-                reward = -1.
-                self.movement_counter = 0
+        if t >= max_step:
+            result = 2
+            terminate = True
+            # print 'time out'
 
         return terminate, result, reward
 

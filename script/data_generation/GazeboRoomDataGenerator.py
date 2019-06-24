@@ -61,6 +61,7 @@ class GridWorld(object):
         self.DrawHorizontalLine([8, 10], 15, 1)
         self.DrawVerticalLine([13, 18], 3, 1)
         self.DrawVerticalLine([15, 20], 5, 1)
+        self.DrawVerticalLine([10, 11], 3, 1)
 
         self.DrawHorizontalLine([12, 18], 15, 1)
 
@@ -157,7 +158,7 @@ class GridWorld(object):
         map_path = []
         real_path = []
         dist = 0.
-        while space == 1. or len(map_path) < 70:
+        while space == 1. or len(map_path) < 40:
             init_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
             goal_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
             space = self.aug_map[init_map_pos[0], init_map_pos[1]] * self.aug_map[goal_map_pos[0], goal_map_pos[1]]
@@ -196,11 +197,16 @@ class GridWorld(object):
         return map_route, real_route
 
     def GetNextNearGoal(self, path, pose):
-        last_point = path[0]
-        if np.linalg.norm([pose[0]-last_point[0], pose[1]-last_point[1]]) < 0.5:
-            return last_point, path[1:]
-        else:
-            return last_point, path
+        # last_point = path[0]
+        path_arr = np.asarray(path)
+        pos_arr = np.asarray(pose[:2])
+        dists = np.sqrt(np.sum((path_arr - pos_arr)**2, axis=1))
+        min_dist = np.amin(dists)
+        min_idx = np.argmin(dists)
+        if min_dist < 0.5:
+            return path[min_idx], path[min_idx+1:]
+        else :
+            return path[min_idx], path
 
     def wrap2pi(self, ang):
         while ang > np.pi:

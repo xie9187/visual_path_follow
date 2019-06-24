@@ -18,6 +18,21 @@ def _lstm_cell(n_hidden, n_layers, name=None):
 #            dropout_keep_prob=keep_prob, reuse=reuse) for _ in range(n_layers)])
 #   return cell
 
+def create_inite_state(n_hidden, n_layers, batch_size, scope=None):
+
+    with tf.variable_scope(scope or 'init_state'):
+        lstm_tuple = tf.contrib.rnn.LSTMStateTuple
+
+        if n_layers > 1:
+          new_state = [lstm_tuple(tf.tile(tf.get_variable('h{0}'.format(i), [1, n_hidden]), [batch_size, 1]), 
+                                  tf.tile(tf.get_variable('c{0}'.format(i), [1, n_hidden]), [batch_size, 1])) for i in xrange(n_layers)]
+          init_state = tuple(new_state)
+        else:
+          init_state = lstm_tuple(tf.tile(tf.get_variable('h0', [1, n_hidden]), [batch_size, 1]),
+                                  tf.tile(tf.get_variable('c0', [1, n_hidden]), [batch_size, 1]))
+
+    return init_state
+
 def _gru_cell(n_hidden, n_layers, name=None):
     cell = tf.contrib.rnn.GRUCell(num_units=n_hidden, name=name or 'gru_cell')
     if n_layers > 1:
@@ -26,36 +41,21 @@ def _gru_cell(n_hidden, n_layers, name=None):
                 num_units=n_hidden, name=name or 'gru_cell') for _ in range(n_layers)])
     return cell
 
-def create_inite_state(n_hidden, n_layers, batch_size, scope=None):
-
-  with tf.variable_scope(scope or 'init_state'):
-    lstm_tuple = tf.contrib.rnn.LSTMStateTuple
-
-    if n_layers > 1:
-      new_state = [lstm_tuple(tf.tile(tf.get_variable('h{0}'.format(i), [1, n_hidden]), [batch_size, 1]), 
-                              tf.tile(tf.get_variable('c{0}'.format(i), [1, n_hidden]), [batch_size, 1])) for i in xrange(n_layers)]
-      init_state = tuple(new_state)
-    else:
-      init_state = lstm_tuple(tf.tile(tf.get_variable('h0', [1, n_hidden]), [batch_size, 1]),
-                              tf.tile(tf.get_variable('c0', [1, n_hidden]), [batch_size, 1]))
-
-  return init_state
-
 
 def mlp(inputs, mlp_hidden=256, mlp_layers=2, scope=None, keep_prob=None):
-  """build an MLP."""
-  with tf.variable_scope(scope or 'mlp'):
-    outputs = inputs
-    for i in xrange(mlp_layers):
-      if keep_prob is not None:
-        outputs = tf.tanh(
-            linear_layer(
-                tf.nn.dropout(outputs, keep_prob), mlp_hidden, True, scope=('l' + str(i))))
-      else:
-        outputs = tf.tanh(
-            linear_layer(
-                outputs, mlp_hidden, True, scope=('l' + str(i))))
-  return outputs
+    """build an MLP."""
+    with tf.variable_scope(scope or 'mlp'):
+        outputs = inputs
+        for i in xrange(mlp_layers):
+            if keep_prob is not None:
+                outputs = tf.tanh(
+                    linear_layer(
+                    tf.nn.dropout(outputs, keep_prob), mlp_hidden, True, scope=('l' + str(i))))
+            else:
+                outputs = tf.tanh(
+                    linear_layer(
+                        outputs, mlp_hidden, True, scope=('l' + str(i))))
+    return outputs
 
 
 def linear_layer(inputs,
@@ -64,34 +64,33 @@ def linear_layer(inputs,
                  bias_start_zero=False,
                  matrix_start_zero=False,
                  scope=None):
-  """Define a linear connection that can customise the parameters."""
+    """Define a linear connection that can customise the parameters."""
 
-  shape = inputs.get_shape().as_list()
+    shape = inputs.get_shape().as_list()
 
-  if len(shape) != 2:
-    raise ValueError('Linear is expecting 2D arguments: %s' % str(shape))
-  if not shape[1]:
-    raise ValueError('Linear expects shape[1] of arguments: %s' % str(shape))
-  input_size = shape[1]
+    if len(shape) != 2:
+        raise ValueError('Linear is expecting 2D arguments: %s' % str(shape))
+    if not shape[1]:
+        raise ValueError('Linear expects shape[1] of arguments: %s' % str(shape))
+    input_size = shape[1]
 
   # Now the computation.
-  with tf.variable_scope(scope or 'Linear'):
-    if matrix_start_zero:
-      matrix = tf.get_variable(
-          'Matrix', [input_size, output_size],
-          initializer=tf.constant_initializer(0))
-    else:
-      matrix = tf.get_variable('Matrix', [input_size, output_size])
-    res = tf.matmul(inputs, matrix)
-    if not bias:
-      return res
-    if bias_start_zero:
-      bias_term = tf.get_variable(
-          'Bias', [output_size], initializer=tf.constant_initializer(0))
-    else:
-      bias_term = tf.get_variable('Bias', [output_size])
-    output = res + bias_term
-  return output
+    with tf.variable_scope(scope or 'Linear'):
+        if matrix_start_zero:
+            matrix = tf.get_variable('Matrix', [input_size, output_size],
+                                    initializer=tf.constant_initializer(0))
+        else:
+            matrix = tf.get_variable('Matrix', [input_size, output_size])
+        res = tf.matmul(inputs, matrix)
+        if not bias:
+            return res
+        if bias_start_zero:
+            bias_term = tf.get_variable(
+                        'Bias', [output_size], initializer=tf.constant_initializer(0))
+        else:
+            bias_term = tf.get_variable('Bias', [output_size])
+        output = res + bias_term
+    return output
 
 def Conv2D(inputs,
            num_outputs,
