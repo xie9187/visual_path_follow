@@ -158,7 +158,7 @@ class GridWorld(object):
         map_path = []
         real_path = []
         dist = 0.
-        while space == 1. or len(map_path) < 40:
+        while space == 1. or len(map_path) < 50:
             init_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
             goal_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
             space = self.aug_map[init_map_pos[0], init_map_pos[1]] * self.aug_map[goal_map_pos[0], goal_map_pos[1]]
@@ -308,8 +308,9 @@ def DataGenerate(data_path, robot_name='robot1'):
             total_reward += reward
 
             # log data
-            rgb_image_save.append(rgb_image)
-            action_save.append(action.tolist())
+            if t > 0:
+                rgb_image_save.append(rgb_image)
+                action_save.append(action.tolist())
 
             if result == 1 or result == 2:
                 Data = [action_save]
@@ -352,7 +353,7 @@ def DataGenerate(data_path, robot_name='robot1'):
 
 if __name__ == '__main__':
     machine_id = socket.gethostname()
-    data_path = os.path.join(CWD[:-19], 'vpf_data/')
+    data_path = '/mnt/Work/catkin_ws/data/vpf_data/'
     data_path = os.path.join(data_path, machine_id)
 
     try:

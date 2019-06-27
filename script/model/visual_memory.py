@@ -18,7 +18,8 @@ class visual_mem(object):
                  action_range=[0.3, np.pi/6],
                  learning_rate=1e-3,
                  test_only=False,
-                 use_demo_action=True):
+                 use_demo_action=False,
+                 use_demo_image=False):
         self.sess = sess
         self.batch_size = batch_size
         self.max_step = max_step
@@ -30,6 +31,7 @@ class visual_mem(object):
         self.action_range = action_range
         self.learning_rate = learning_rate
         self.test_only = test_only
+        self.use_demo_action = use_demo_action
 
         with tf.variable_scope('network', reuse=tf.AUTO_REUSE):    
             # training input
@@ -56,12 +58,19 @@ class visual_mem(object):
                 input_demo_img_reshape = tf.reshape(self.input_demo_img, [-1] + dim_img)# b *l of demo,h,d,c
                 input_demo_a_reshape = tf.reshape(self.input_demo_a, [-1, dim_a]) #b * l of demo, 2
                 demo_img_vect = self.encode_image(input_demo_img_reshape) #b * l of demob, -1
-                if use_demo_action:
+                assert use_demo_action or use_demo_image, 'use demo image or action or both!'
+                if use_demo_action and use_demo_image:
+                    print 'use demo action and image'
                     demo_vect = tf.concat([demo_img_vect, input_demo_a_reshape], axis=1) #b * l of demo, -1
-                else:
+                elif use_demo_image:
+                    print 'only use demo image'
                     demo_vect = demo_img_vect
-                hidden1 = model_utils.DenseLayer(demo_vect, n_hidden, scope='dense1_demo')
-                demo_feat = model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_demo')  #b * l of demo, n_hidden
+                elif use_demo_action:
+                    print 'only use demo action'
+                    demo_vect = input_demo_a_reshape
+
+                hidden1 = model_utils.dense_layer(demo_vect, n_hidden, scope='dense1_demo')
+                demo_feat = model_utils.dense_layer(hidden1, n_hidden, scope='dense2_demo')  #b * l of demo, n_hidden
                 demo_feat_reshape = tf.reshape(demo_feat, [-1, demo_len, n_hidden]) #b, l of demo, n_hidden
                 demo_feat_list= tf.unstack(demo_feat_reshape, axis=1) # l of demo [b, n_hidden]
                 
@@ -87,12 +96,12 @@ class visual_mem(object):
                     input_t = tf.concat([mu_t, img_vect], axis=1) #b, n_hidden + dim of img vect
                     gru_output, self.gru_h_out = gru_cell(input_t, gru_h_in)
                     gru_h_in = self.gru_h_out
-                    increment = 1. + model_utils.DenseLayer(gru_output, 1, activation=tf.nn.tanh, scope='dense_increment') #b, 1
+                    increment = 1. + model_utils.dense_layer(gru_output, 1, activation=tf.nn.tanh, scope='dense_increment') #b, 1
                     increment = tf.squeeze(increment, axis=[1]) #b
                     eta = tf.identity(eta + increment, name='eta_{}'.format(t))
                     eta_list.append(eta)
-                    action_linear = model_utils.DenseLayer(gru_output, dim_a/2, activation=tf.nn.sigmoid, scope='dense_a_linear') * action_range[0] #b,1
-                    action_angular = model_utils.DenseLayer(gru_output, dim_a/2, activation=tf.nn.tanh, scope='dense_a_angular') * action_range[1] #b,1      
+                    action_linear = model_utils.dense_layer(gru_output, dim_a/2, activation=tf.nn.sigmoid, scope='dense_a_linear') * action_range[0] #b,1
+                    action_angular = model_utils.dense_layer(gru_output, dim_a/2, activation=tf.nn.tanh, scope='dense_a_angular') * action_range[1] #b,1      
                     action_list.append(tf.concat([action_linear, action_angular], axis=1)) #l[b,2]
                 self.action_seq = tf.stack(action_list, axis=1) #b, l, 2
                 self.eta_array = tf.stack(eta_list, axis=1) #b, l
@@ -104,12 +113,14 @@ class visual_mem(object):
             # testing
             # process demo seq
             demo_img_vect = self.encode_image(self.input_demo_img_test,) # l of demob, -1
-            if use_demo_action:
+            if use_demo_action and use_demo_image:
                 demo_vect = tf.concat([demo_img_vect, self.input_demo_a_test], axis=1) # l of demo, -1
-            else:
+            elif use_demo_image:
                 demo_vect = demo_img_vect
-            hidden1 = model_utils.DenseLayer(demo_vect, n_hidden, scope='dense1_demo')
-            demo_feat = model_utils.DenseLayer(hidden1, n_hidden, scope='dense2_demo')  # l of demo, n_hidden
+            elif use_demo_action:
+                demo_vect = self.input_demo_a_test
+            hidden1 = model_utils.dense_layer(demo_vect, n_hidden, scope='dense1_demo')
+            demo_feat = model_utils.dense_layer(hidden1, n_hidden, scope='dense2_demo')  # l of demo, n_hidden
 
             tensor_array = tf.TensorArray(tf.float32, 0, dynamic_size=True, infer_shape=True, element_shape=[n_hidden])
             demo_feat_array = tensor_array.unstack(demo_feat)
@@ -150,25 +161,26 @@ class visual_mem(object):
             input_t = tf.concat([mu_t_expand, img_vect], axis=1) #1, n_hidden*2
             gru_output, self.gru_h_out = gru_cell(input_t, gru_h_in)
             gru_h_in = self.gru_h_out
-            increment = 1. + model_utils.DenseLayer(gru_output, 1, activation=tf.nn.tanh, scope='dense_increment') #b, 1
+            increment = 1. + model_utils.dense_layer(gru_output, 1, activation=tf.nn.tanh, scope='dense_increment') #b, 1
             increment = tf.squeeze(increment, axis=[1]) #1
             self.eta = eta + increment
-            action_linear = model_utils.DenseLayer(gru_output, dim_a/2, activation=tf.nn.sigmoid, scope='dense_a_linear') * action_range[0] #b,1
-            action_angular = model_utils.DenseLayer(gru_output, dim_a/2, activation=tf.nn.tanh, scope='dense_a_angular') * action_range[1] #b,1
+            action_linear = model_utils.dense_layer(gru_output, dim_a/2, activation=tf.nn.sigmoid, scope='dense_a_linear') * action_range[0] #b,1
+            action_angular = model_utils.dense_layer(gru_output, dim_a/2, activation=tf.nn.tanh, scope='dense_a_angular') * action_range[1] #b,1
             self.action = tf.concat([action_linear, action_angular], axis=1)
 
     def encode_image(self, inputs):
-        conv1 = model_utils.Conv2D(inputs, 16, 3, 2, scope='conv1', max_pool=False)
-        conv2 = model_utils.Conv2D(conv1, 32, 3, 2, scope='conv2', max_pool=False)
-        conv3 = model_utils.Conv2D(conv2, 64, 3, 2, scope='conv3', max_pool=False)
-        conv4 = model_utils.Conv2D(conv3, 128, 3, 2, scope='conv4', max_pool=False)
-        conv5 = model_utils.Conv2D(conv4, 256, 3, 2, scope='conv5', max_pool=False)
+        conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope='conv1', max_pool=False)
+        conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False)
+        conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False)
+        conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False)
+        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False)
         shape = conv5.get_shape().as_list()
         outputs = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b * l, -1
         return outputs
 
 
-    def train(self, input_demo_img, input_demo_a, input_img, label_a):
+    def train(self, data):
+        input_demo_img, input_demo_a, input_img, label_a, _ = data
         if not self.test_only:
             input_eta = np.zeros([self.batch_size], np.float32)
             gru_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)
@@ -183,7 +195,8 @@ class visual_mem(object):
         else:
             return [], [], [], []
 
-    def valid(self, input_demo_img, input_demo_a, input_img, label_a):
+    def valid(self, data):
+        input_demo_img, input_demo_a, input_img, label_a, _ = data
         if not self.test_only:
             input_eta = np.zeros([self.batch_size], np.float32)
             gru_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)

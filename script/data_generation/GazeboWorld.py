@@ -35,7 +35,8 @@ class GazeboWorld():
         self.model_states_data = None
         self.robot_name = robot_name
         self.depth_image_size = [64, 64]
-        self.rgb_image_size = [64, 64]
+        # self.rgb_image_size = [64, 64]
+        self.rgb_image_size = [640, 480]
         self.bridge = CvBridge()
 
         self.object_poses = []

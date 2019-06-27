@@ -9,6 +9,7 @@ import random
 import utils.data_utils as data_utils
 import utils.model_utils as model_utils
 import model.visual_memory as model_basic
+import model.img_pair_to_action as model_test
 import progressbar
 import rospy
 
@@ -23,23 +24,25 @@ flag = tf.app.flags
 # network param
 flag.DEFINE_integer('batch_size', 16, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
-flag.DEFINE_integer('max_step', 100, 'max step.')
+flag.DEFINE_integer('max_step', 80, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
-flag.DEFINE_integer('dim_img_h', 64, 'input image height.')
-flag.DEFINE_integer('dim_img_w', 64, 'input image width.')
+flag.DEFINE_integer('dim_img_h', 96, 'input image height.')
+flag.DEFINE_integer('dim_img_w', 128, 'input image width.')
 flag.DEFINE_integer('dim_img_c', 3, 'input image channels.')
 flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
-flag.DEFINE_integer('demo_len', 25, 'length of demo.')
-flag.DEFINE_boolean('use_demo_action', True, 'whether to use action in demo.')
+flag.DEFINE_integer('demo_len', 20, 'length of demo.')
+flag.DEFINE_boolean('use_demo_action', False, 'whether to use action in demo.')
+flag.DEFINE_boolean('use_demo_image', False, 'whether to use image in demo.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
+flag.DEFINE_boolean('use_flownet', False, 'whether to use flownet')
 
 # training param
-# flag.DEFINE_string('data_dir',  '/mnt/Work/catkin_ws/data/vpf_data/linhai-AW-15-R3',
-#                     'Data directory')
-flag.DEFINE_string('data_dir',  '/home/linhai/temp_data/linhai-AW-15-R3',
+flag.DEFINE_string('data_dir',  '/mnt/Work/catkin_ws/data/vpf_data/localhost',
                     'Data directory')
+# flag.DEFINE_string('data_dir',  '/home/linhai/temp_data/linhai-AW-15-R3',
+#                     'Data directory')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('load_model_dir', ' ', 'load model directory.')
 flag.DEFINE_string('model_name', 'test_model', 'model name.')
@@ -50,33 +53,47 @@ flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('imitate_learn', False, 'use imitation learning.')
 flag.DEFINE_string('demo_interval_mode', 'random', 'the mode of demo interval')
 flag.DEFINE_integer('buffer_size', 100, 'buffer size.')
+flag.DEFINE_boolean('model_test', False, 'test a new model.')
 
 flags = flag.FLAGS
 
 def training(sess, model):
-
+    seg_point = 5
     file_path_number_list = data_utils.get_file_path_number_list([flags.data_dir])
-    file_path_number_list_train = file_path_number_list[:len(file_path_number_list)*9/10]
-    file_path_number_list_valid = file_path_number_list[len(file_path_number_list)*9/10:]
+    file_path_number_list_train = file_path_number_list[:len(file_path_number_list)*seg_point/10]
+    file_path_number_list_valid = file_path_number_list[len(file_path_number_list)*seg_point/10:]
 
     model_dir = os.path.join(flags.model_dir, flags.model_name)
     if not os.path.exists(model_dir): 
         os.makedirs(model_dir)
+    flownet_model_dir = os.path.join(flags.model_dir, 'flownet')
 
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     sess.run(init_op)
 
     trainable_var = tf.trainable_variables()
     part_var = []
+    flownet_var = []
     for idx, v in enumerate(trainable_var):
-        print '  var {:3}: {:15}   {}'.format(idx, str(v.get_shape()), v.name)
+        print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
         with tf.name_scope(v.name.replace(':0', '')):
             model_utils.variable_summaries(v)
+        if flags.use_flownet and 'FlowNetS' in v.name:
+            flownet_var.append(v) 
 
-    merged = tf.summary.merge_all()
+    # merged = tf.summary.merge_all()
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
     saver = tf.train.Saver(max_to_keep=5)
+    saver_flownet = tf.train.Saver(flownet_var, max_to_keep=1)
+
+    if flags.use_flownet:
+        checkpoint_flownet = tf.train.get_checkpoint_state(flownet_model_dir)
+        if checkpoint_flownet and checkpoint_flownet.model_checkpoint_path:
+            saver_flownet.restore(sess, checkpoint_flownet.model_checkpoint_path)
+            print 'flownet model loaded: ', checkpoint_flownet.model_checkpoint_path 
+        else:
+            print 'flownet model not found'
 
     if flags.load_model:
         checkpoint = tf.train.get_checkpoint_state(model_dir)
@@ -106,12 +123,13 @@ def training(sess, model):
                                                             flags.batch_size, 
                                                             flags.max_step, 
                                                             flags.demo_len,
-                                                            flags.demo_interval_mode)
+                                                            flags.demo_interval_mode,
+                                                            flags.model_test,
+                                                            (flags.dim_img_w, flags.dim_img_h) if flags.use_flownet else None)
             if end_flag:
                 break
-            demo_img_seq, demo_action_seq, img_stack, action_seq, demo_indices = batch_data
             opt_start_time = time.time()
-            action_seq, eta_array, loss, _ = model.train(demo_img_seq, demo_action_seq, img_stack, action_seq)
+            action_seq, eta_array, loss, _ = model.train(batch_data)
             opt_time.append(time.time()-opt_start_time)
             loss_list.append(loss)
             bar.update(pos)
@@ -127,11 +145,14 @@ def training(sess, model):
                                                             pos, 
                                                             flags.batch_size, 
                                                             flags.max_step, 
-                                                            flags.demo_len)
+                                                            flags.demo_len,
+                                                            flags.demo_interval_mode,
+                                                            flags.model_test,
+                                                            (flags.dim_img_w, flags.dim_img_h) if flags.use_flownet else None)
             if end_flag:
                 break
-            demo_img_seq, demo_action_seq, img_stack, action_seq, _ = batch_data
-            loss = model.valid(demo_img_seq, demo_action_seq, img_stack, action_seq)
+            batch_demo_indicies = batch_data[-1]
+            loss = model.valid(batch_data)
             loss_list.append(loss)
         loss_valid = np.mean(loss_list)
 
@@ -142,19 +163,25 @@ def training(sess, model):
                      '| OptTime(s): {:.4f}'.format(np.mean(opt_time))
         print info_train
 
-        summary = sess.run(merged)
+        summary = tf.Summary()
+        summary.value.add(tag='TrainLoss', simple_value=float(loss_train))
+        summary.value.add(tag='TestLoss', simple_value=float(loss_valid))
+        # summary = sess.run(merged)
         summary_writer.add_summary(summary, epoch)
+
 
         eta_log.append(eta_array[0].tolist())
         eta_log_file = os.path.join(model_dir, 'eta_log.csv') 
         data_utils.write_csv(eta_log, eta_log_file)
 
-        eta_label_log.append(demo_indices[0])
+
+        eta_label_log.append(batch_demo_indicies[0])
         eta_label_log_file = os.path.join(model_dir, 'eta_log_label.csv') 
         data_utils.write_csv(eta_label_log, eta_label_log_file)
 
         if flags.save_model and (epoch+1)%5 == 0:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
+
 
 def testing(sess, model):
     # init network
@@ -526,8 +553,9 @@ def il_training(sess, model):
 def main():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    with tf.Session(config=config) as sess:
-        model = model_basic.visual_mem(sess=sess,
+    with tf.Session(config=config) as sess:#
+        if flags.model_test:
+            model = model_test.visual_mem(sess=sess,
                                       batch_size=flags.batch_size,
                                       max_step=flags.max_step,
                                       demo_len=flags.demo_len,
@@ -538,7 +566,23 @@ def main():
                                       action_range=[flags.a_linear_range, flags.a_angular_range],
                                       learning_rate=flags.learning_rate,
                                       test_only=flags.test,
-                                      use_demo_action=flags.use_demo_action)
+                                      use_demo_action=flags.use_demo_action,
+                                      use_demo_image=flags.use_demo_image,
+                                      use_flownet=flags.use_flownet)
+        else:
+            model = model_basic.visual_mem(sess=sess,
+                                      batch_size=flags.batch_size,
+                                      max_step=flags.max_step,
+                                      demo_len=flags.demo_len,
+                                      n_layers=flags.n_layers,
+                                      n_hidden=flags.n_hidden,
+                                      dim_a=flags.dim_a,
+                                      dim_img=[flags.dim_img_h, flags.dim_img_w, flags.dim_img_c],
+                                      action_range=[flags.a_linear_range, flags.a_angular_range],
+                                      learning_rate=flags.learning_rate,
+                                      test_only=flags.test,
+                                      use_demo_action=flags.use_demo_action,
+                                      use_demo_image=flags.use_demo_image)
         if not flags.test:
             if flags.imitate_learn:
                 il_training(sess, model)

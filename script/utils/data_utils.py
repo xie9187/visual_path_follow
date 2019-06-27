@@ -71,8 +71,11 @@ def read_csv_file(file_name):
     file.close()
     return curr_seq
 
-def read_img_file(file_name):
+def read_img_file(file_name, resize=None):
     bgr_img = cv2.imread(file_name)
+    if resize is not None:
+        bgr_img = cv2.resize(bgr_img, resize, 
+                             interpolation=cv2.INTER_AREA)
     rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
     return rgb_img
 
@@ -97,7 +100,7 @@ def read_data_to_mem(data_path, max_step):
         action_seq = np.reshape(read_csv_file(action_file_name), [-1, 2])
         if len(action_seq) < max_step:
             print 'acttion num incorrect'
-            break
+            continue
         elif len(action_seq) > max_step:
             action_seq = action_seq[:max_step, :]
 
@@ -107,7 +110,7 @@ def read_data_to_mem(data_path, max_step):
         
         if len(img_file_list) < max_step:
             print 'img num incorrect'
-            break
+            continue
         elif len(img_file_list) > max_step:
             img_file_list = img_file_list[:max_step]
         img_list = []
@@ -159,6 +162,34 @@ def get_a_batch(data, start, batch_size, demo_length, interval_mode='random'):
     # print 'sampled a batch in {:.1f}s '.format(time.time() - start_time)  
     return batch_demo_img_seq, batch_demo_action_seq, batch_img_seq, batch_action_seq, batch_demo_indicies
 
+def get_a_batch_test(data, start, batch_size, demo_length, interval_mode='fixed'):
+    start_time = time.time()
+    batch_demo_seq = []
+    batch_obs_seq = []
+    batch_action_seq = []
+    batch_demo_indicies = []
+    for i in xrange(batch_size):
+        idx = start + i
+        action_seq = data[idx][1]
+        img_seq_0_t = data[idx][0].astype(np.float32)/255. # l, h, w, c
+        demo_indicies = []
+        sec_start = 0
+        sec_len = len(img_seq_0_t)/demo_length
+        for section in range(demo_length-1):
+            if interval_mode == 'fixed':
+                demo_indicies.append(sec_start+sec_len-1)
+                sec_start += sec_len
+        demo_indicies.append(len(img_seq_0_t)-2)
+        demo_indicies = np.repeat(demo_indicies, sec_len)+1
+        demo_seq = img_seq_0_t[demo_indicies, :, :, :]
+
+        batch_demo_seq.append(demo_seq)
+        batch_obs_seq.append(img_seq_0_t)
+        batch_action_seq.append(action_seq)
+        batch_demo_indicies.append(demo_indicies)
+    return batch_demo_seq, batch_obs_seq, batch_action_seq, batch_demo_indicies
+
+
 def get_file_path_number_list(data_path_list):
     file_path_number_list = []
     for data_path in data_path_list:
@@ -174,7 +205,8 @@ def get_file_path_number_list(data_path_list):
         print 'Found {} sequences!!'.format(len(file_path_number_list))
     return file_path_number_list
 
-def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, demo_len, mode='random'):
+def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, 
+                        demo_len, mode='random', test=False, resize=None):
     end = start
     data = []
     start_time = time.time()
@@ -185,8 +217,8 @@ def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, demo
         action_file_name = file_path_number + '_action.csv'
         action_seq = np.reshape(read_csv_file(action_file_name), [-1, 2])
         if len(action_seq) < max_step:
-            print 'acttion num incorrect'
-            break
+            # print 'action num incorrect'
+            continue
         elif len(action_seq) > max_step:
             action_seq = action_seq[:max_step, :]
 
@@ -195,14 +227,14 @@ def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, demo
         img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
 
         if len(img_file_list) < max_step:
-            print 'img num incorrect'
-            break
+            # print 'img num incorrect'
+            continue
         elif len(img_file_list) > max_step:
             img_file_list = img_file_list[:max_step]
         img_list = []
         for img_file_name in img_file_list:
             img_file_path = os.path.join(img_seq_path, img_file_name)
-            img = read_img_file(img_file_path)
+            img = read_img_file(img_file_path, resize)
             img_list.append(img)
         img_seq = np.stack(img_list, axis=0)
         data.append([img_seq, action_seq])
@@ -210,7 +242,10 @@ def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, demo
             return None, None, True
     read_time = time.time() - start_time
 
-    batch_data = get_a_batch(data, 0, batch_size, demo_len, mode)
+    if test:
+        batch_data = get_a_batch_test(data, 0, batch_size, demo_len, mode)
+    else:
+        batch_data = get_a_batch(data, 0, batch_size, demo_len, mode)
     process_time = time.time() - start_time - read_time
 
     # print 'read time: {:.2f}s, process time: {:.2f}s '.format(read_time, process_time)  
@@ -250,18 +285,28 @@ if __name__ == '__main__':
     # batch_data = get_a_batch(data, 0, batch_size, demo_len)
 
     file_path_number_list = get_file_path_number_list(['/mnt/Work/catkin_ws/data/vpf_data/test'])
-    batch_data, pos, end_flag = read_a_batch_to_mem(file_path_number_list, pos, batch_size, max_step, demo_len)
+    batch_data, pos, end_flag = read_a_batch_to_mem(file_path_number_list, 
+                                                    pos, 
+                                                    batch_size, 
+                                                    max_step, 
+                                                    demo_len,
+                                                    mode='fixed',
+                                                    test=True)
 
     seq_no = np.random.randint(batch_size)
-    img_seq = batch_data[2][seq_no]
-    a_seq = batch_data[3][seq_no]
+    # img_seq = batch_data[2][seq_no]
+    # a_seq = batch_data[3][seq_no]
+    # demo_img_seq = batch_data[0][seq_no]
+    # demo_indicies = batch_data[4][seq_no]
+    img_seq = batch_data[1][seq_no]
+    a_seq = batch_data[2][seq_no]
     demo_img_seq = batch_data[0][seq_no]
-    demo_indicies = batch_data[4][seq_no]
+    demo_indicies = batch_data[3][seq_no]
     fig, ax = plt.subplots(1, 2)
     x1=30
     y1=50
     print 'demo_indicies: ', demo_indicies
-    demo_idx = 0
+    demo_idx = 1
 
     for t in xrange(len(img_seq)):
         ax[0].cla()
@@ -271,14 +316,16 @@ if __name__ == '__main__':
         ax[0].set(xlabel='img obs {}'.format(t))
 
         ax[1].cla()
-        ax[1].imshow(demo_img_seq[demo_idx])
+        # ax[1].imshow(demo_img_seq[demo_idx])
+        ax[1].imshow(demo_img_seq[t])
         ax[1].set_aspect('equal', 'box')
         ax[1].set(xlabel='img demo {}'.format(demo_idx))
 
         if t in demo_indicies:
             demo_idx += 1
 
-        plt.pause(0.1)
-
+        plt.pause(1)
+        # plt.show()
+        # plt.show(block=False)
 
             
