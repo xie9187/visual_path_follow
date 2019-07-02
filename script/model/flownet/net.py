@@ -7,6 +7,7 @@ import numpy as np
 from scipy.misc import imread, imsave
 import uuid
 import cv2
+import csv
 from training_schedules import LONG_SCHEDULE
 slim = tf.contrib.slim
 
@@ -40,14 +41,19 @@ class Net(object):
         """
         return
 
-    def test(self, checkpoint, input_a_path, input_b_path, out_path, save_image=True, save_flo=False):
-        input_a = imread(input_a_path)
-        input_b = imread(input_b_path)
-        input_a = cv2.resize(input_a, (512, 384), interpolation = cv2.INTER_AREA)
-        input_b = cv2.resize(input_b, (512, 384), interpolation = cv2.INTER_AREA)
-        # Convert from RGB -> BGR
-        input_a = input_a[..., [2, 1, 0]]
-        input_b = input_b[..., [2, 1, 0]]
+    def test(self, checkpoint, input_path, out_path, save_image=False, save_flo=False):
+        img_file_list = os.listdir(input_path)
+        img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
+        img_list = []
+        for img_file_name in img_file_list:
+            img_file_path = os.path.join(input_path, img_file_name)
+            img = imread(img_file_path)
+            img = cv2.resize(img, (512, 384), interpolation = cv2.INTER_AREA)
+            # Convert from RGB -> BGR
+            img = img[..., [2, 1, 0]]
+            img_list.append(img)
+        input_a = np.stack(img_list[:-1], axis=0)
+        input_b = np.stack(img_list[1:], axis=0)
 
         # Scale from [0, 255] -> [0.0, 1.0] if needed
         if input_a.max() > 1.0:
@@ -59,28 +65,40 @@ class Net(object):
         training_schedule = LONG_SCHEDULE
 
         inputs = {
-            'input_a': tf.expand_dims(tf.constant(input_a, dtype=tf.float32), 0),
-            'input_b': tf.expand_dims(tf.constant(input_b, dtype=tf.float32), 0),
+            'input_a': tf.constant(input_a, dtype=tf.float32),
+            'input_b': tf.constant(input_b, dtype=tf.float32),
         }
         predictions = self.model(inputs, training_schedule)
         pred_flow = predictions['flow']
 
         saver = tf.train.Saver()
-
+        num = int(filter(str.isdigit, input_path))
+        file = open(os.path.join(out_path, str(num)+'_flow.csv'), 'w')
+        writer = csv.writer(file, delimiter=',', quotechar='|')
         with tf.Session() as sess:
             saver.restore(sess, checkpoint)
-            pred_flow = sess.run(pred_flow)[0, :, :, :]
+            pred_flow_seq = sess.run(pred_flow)
+            pred_flow_lists = np.split(pred_flow_seq, len(pred_flow_seq), axis=0)
+            for t, pred_flow in enumerate(pred_flow_lists):
+                # unique_name = input_a_path.split('.')[-2].split('/')[-1]+'and'+input_b_path.split('.')[-2].split('/')[-1]
+                unique_name = str(t)
+                pred_flow = np.squeeze(pred_flow)
+                shape = np.shape(pred_flow)
+                mean_flow = np.mean(pred_flow[shape[0]/4:shape[0]/4*3, 
+                                           shape[1]/4:shape[1]/4*3,
+                                           :],
+                                 axis=(0, 1))
+                writer.writerow(mean_flow)
+                if save_image:
+                    
+                    flow_img = flow_to_image(pred_flow)
+                    full_out_path = os.path.join(out_path, unique_name + '.png')
+                    imsave(full_out_path, flow_img)
 
-            unique_name = 'flow-' + str(uuid.uuid4())
-            unique_name = input_a_path.split('.')[-2].split('/')[-1]+'and'+input_b_path.split('.')[-2].split('/')[-1]
-            if save_image:
-                flow_img = flow_to_image(pred_flow)
-                full_out_path = os.path.join(out_path, unique_name + '.png')
-                imsave(full_out_path, flow_img)
-
-            if save_flo:
-                full_out_path = os.path.join(out_path, unique_name + '.flo')
-                write_flow(pred_flow, full_out_path)
+                if save_flo:
+                    full_out_path = os.path.join(out_path, unique_name + '.flo')
+                    write_flow(pred_flow, full_out_path)
+        file.close()
 
     def train(self, log_dir, training_schedule, input_a, input_b, flow, checkpoints=None):
         tf.summary.image("image_a", input_a, max_outputs=2)

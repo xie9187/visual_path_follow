@@ -2,25 +2,19 @@ import numpy as np
 import cv2
 import copy
 import tensorflow as tf
-import math
 import os
 import sys
 import time
+import random
 import rospy
-import random
-import matplotlib.pyplot as plt
-import math 
-import csv
-import png
-import socket
-import random
-import pickle
+import utils.data_utils as data_utils
 
-from model.ddpg import DDPG
+from data_generation.GazeboRoomDataGenerator import GridWorld, FileProcess
 from data_generation.GazeboWorld import GazeboWorld
-from data_generation.GazeboRoomDataGenerator import GridWorld
 from utils.ou_noise import OUNoise
 from utils.model_utils import variable_summaries
+from model.visual_path_guide import image_action_guidance_sift
+
 
 CWD = os.getcwd()
 RANDOM_SEED = 1234
@@ -31,39 +25,34 @@ flag = tf.app.flags
 flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
 flag.DEFINE_float('a_learning_rate', 1e-4, 'Actor learning rate.')
 flag.DEFINE_float('c_learning_rate', 1e-3, 'Critic learning rate.')
-flag.DEFINE_integer('max_step', 150, 'max step.')
+flag.DEFINE_integer('max_step', 80, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
 flag.DEFINE_integer('n_cmd_type', 6, 'number of cmd class.')
-flag.DEFINE_integer('dim_emb', 64, 'embedding dimension.')
-flag.DEFINE_integer('dim_laser_b', 666, 'number of laser beam.')
-flag.DEFINE_integer('dim_laser_c', 3, 'number of laser channel.')
-flag.DEFINE_integer('dim_goal', 2, 'dimension of goal.')
-flag.DEFINE_integer('dim_cmd', 1, 'dimension of cmd.')
+flag.DEFINE_integer('dim_rgb_h', 192, 'input image height.') # 96
+flag.DEFINE_integer('dim_rgb_w', 256, 'input image width.') # 128
+flag.DEFINE_integer('dim_rgb_c', 3, 'input image channels.')
 flag.DEFINE_integer('dim_action', 2, 'dimension of action.')
-flag.DEFINE_float('loss_w0', 1., 'loss weight0')
-flag.DEFINE_float('loss_w1', 1., 'loss weight1')
-flag.DEFINE_boolean('encoder_training', True, 'whether to train encoder')
-flag.DEFINE_float('keep_prob', 0.8, 'Drop out parameter.')
-flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.4')
+flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/4 ~ np.pi/4')
-flag.DEFINE_integer('gpu_num', 1, 'Number of GPUs')
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
-flag.DEFINE_boolean('demo_flag', False, 'Whether to use demonstrations on action')
 
 # training param
-flag.DEFINE_integer('total_steps', 500000, 'Total training steps.')
-flag.DEFINE_string('model_dir', os.path.join(CWD[:-7], 'lan_nav_data/saved_network/'), 'saved model directory.')
-flag.DEFINE_string('model_name', 'test', 'Name of the model.')
-flag.DEFINE_integer('steps_per_checkpoint', 10000, 'How many training steps to do per checkpoint.')
-flag.DEFINE_integer('buffer_size', 10000, 'The size of Buffer')
-flag.DEFINE_float('gamma', 0.99, 'reward discount')
-flag.DEFINE_boolean('load_model', False, 'Whether to load model')
-flag.DEFINE_integer('noise_stop_episode', 1000000, 'episode to stop add exploration noise')
-flag.DEFINE_float('init_epsilon', 0.01, 'true action rate')
-flag.DEFINE_float('init_noise', 1., 'true action rate')
-flag.DEFINE_boolean('testing', False, 'testing')
-flag.DEFINE_string('init_model_name', 'empty', 'model to initailize')
+flag.DEFINE_string('data_dir',  '/mnt/Work/catkin_ws/data/vpf_data/localhost',
+                    'Data directory')
+# flag.DEFINE_string('data_dir',  '/home/linhai/temp_data/linhai-AW-15-R3',
+#                     'Data directory')
+flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
+flag.DEFINE_string('load_model_dir', ' ', 'load model directory.')
+flag.DEFINE_string('model_name', 'test_model', 'model name.')
+flag.DEFINE_integer('max_epoch', 100, 'max epochs.')
+flag.DEFINE_boolean('save_model', True, 'save model.')
+flag.DEFINE_boolean('load_model', False, 'load model.')
+flag.DEFINE_boolean('test', False, 'whether to test.')
+flag.DEFINE_boolean('imitate_learn', False, 'use imitation learning.')
+flag.DEFINE_string('demo_interval_mode', 'random', 'the mode of demo interval')
+flag.DEFINE_integer('buffer_size', 100, 'buffer size.')
+flag.DEFINE_boolean('model_test', False, 'test a new model.')
 
 # noise param
 flag.DEFINE_float('mu', 0., 'mu')
@@ -74,318 +63,141 @@ flag.DEFINE_boolean('rviz', False, 'rviz')
 
 flags = flag.FLAGS
 
-def FileProcess():
-    # --------------change the map_server launch file-----------
-    with open('./config/map.yaml', 'r') as launch_file:
-        launch_data = launch_file.readlines()
-        launch_data[0] = 'image: ' + CWD + '/world/map.png\n'
-    with open('./config/map.yaml', 'w') as launch_file:
-        launch_file.writelines(launch_data)     
+def main(sess):
+    # init visual path guide
+    guidance = image_action_guidance_sift()
 
-    time.sleep(1.)
-    print "file processed"
-
-def main(robot_name, rviz):
-    # np.random.seed(RANDOM_SEED)
-    tf.set_random_seed(RANDOM_SEED)
-    world = GridWorld()
-    switch_action = False
-    # world.map, switch_action = world.RandomSwitchRoom()
-    world.GetAugMap()
-    world.CreateTable()
+    # init environment
+    world = GridWorld()    
+    env = GazeboWorld('robot1', rgb_size=[flags.dim_rgb_w, flags.dim_rgb_h])
+    obj_list = env.GetModelStates()
     cv2.imwrite('./world/map.png', np.flipud(1-world.map)*255)
 
     FileProcess()
-
-    env = GazeboWorld(world.table, robot_name, rviz=rviz)
+    
     print "Env initialized"
-    time.sleep(2.)
 
     rate = rospy.Rate(5.)
-    
-
-    pickle_path = os.path.join(CWD, 'world/model_states_data.p')
-
-    env.GetModelStates()
-    env.ResetWorld()
-    # env.ResetModelsPose(pickle_path)
-    if switch_action:
-        env.SwitchRoom(switch_action)
-
-    env.state_call_back_flag = True
-    env.target_theta_range = 1.
+    T = 0
+    episode = 0
     time.sleep(2.)
 
-    exploration_noise = OUNoise(action_dimension=flags.dim_action, 
-                                mu=flags.mu, theta=flags.theta, sigma=flags.sigma)
+    # start learning
+    demo_flag = True
+    result_buf = []
+    data_buffer = data_utils.data_buffer(flags.buffer_size)
+    training_start_time = time.time()
+    while not rospy.is_shutdown() and episode < flags.max_epoch:
+        time.sleep(1.)
+        if demo_flag:
+            world.CreateMap()
+            if episode % 20 == 19:
+                print 'randomising the environment'
+                obj_pose_dict = world.RandomEnv(obj_list)
+                for name in obj_pose_dict:
+                    env.SetObjectPose(name, obj_pose_dict[name])
+                time.sleep(2.)
+                print 'randomisation finished'
+            obj_list = env.GetModelStates()
+            world.MapObjects(obj_list)
+            world.GetAugMap()
+            
+            map_route, real_route, init_pose = world.RandomPath()
 
-    config = tf.ConfigProto(allow_soft_placement=True)
-    with tf.Session(config=config) as sess:
-        agent = DDPG(flags, sess)
-
-        trainable_var = tf.trainable_variables()
-        sess.run(tf.global_variables_initializer())
-        
-        model_dir = os.path.join(flags.model_dir, flags.model_name)
-        if not os.path.exists(model_dir): 
-            os.makedirs(model_dir)
-        init_dir = os.path.join(flags.model_dir, flags.init_model_name)
-
-        # summary
-        if not flags.testing:
-            print "  [*] printing trainable variables"
-            for idx, v in enumerate(trainable_var):
-                print "  var {:3}: {:15}   {}".format(idx, str(v.get_shape()), v.name)
-                # with tf.name_scope(v.name.replace(':0', '')):
-                #     variable_summaries(v)
-
-            reward_ph = tf.placeholder(tf.float32, [], name='reward')
-            q_ph = tf.placeholder(tf.float32, [], name='q_pred')
-            noise_ph = tf.placeholder(tf.float32, [], name='noise')
-            epsilon_ph = tf.placeholder(tf.float32, [], name='epsilon')
-
-            tf.summary.scalar('reward', reward_ph)
-            tf.summary.scalar('q_estimate', q_ph)
-            tf.summary.scalar('noise', noise_ph)
-            tf.summary.scalar('epsilon', epsilon_ph)
-            merged = tf.summary.merge_all()
-            summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
-
-        part_var = []
-        for idx, v in enumerate(trainable_var):
-            if 'actor/online/encoder' in  v.name or 'actor/online/controller' in v.name:
-                part_var.append(v)
-        saver = tf.train.Saver(trainable_var, max_to_keep=5)
-        part_saver = tf.train.Saver(part_var, max_to_keep=5)
-
-        # load model
-        if 'empty' in flags.init_model_name:
-            checkpoint = tf.train.get_checkpoint_state(model_dir)
-            if checkpoint and checkpoint.model_checkpoint_path:
-                saver.restore(sess, checkpoint.model_checkpoint_path)
-                print("Network model loaded: ", checkpoint.model_checkpoint_path)
-            else:
-                print('No model is found')
         else:
-            checkpoint = tf.train.get_checkpoint_state(init_dir)
-            if checkpoint and checkpoint.model_checkpoint_path:
-                part_saver.restore(sess, checkpoint.model_checkpoint_path)
-                print("Network model loaded: ", checkpoint.model_checkpoint_path)
-            else:
-                print('No model is found')
-
-
-        episode = 0
-        T = 0
-        epsilon = flags.init_epsilon
-        noise = flags.init_noise 
-        # start training
-
-
-        room_position = np.array([-1, -1])
-        while T < flags.total_steps and not rospy.is_shutdown():
-            print ''
-            # set robot in a room
-            init_pose, init_map_pose, room_position = world.RandomInitPoseInRoom()
-            env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]])
-            time.sleep(1.)
-            # generate a path to other room
-            target_pose, target_map_pose, _ = world.RandomInitPoseInRoom(room_position)
-            # get a long path
-            map_plan, real_route = world.GetPath(init_map_pose+target_map_pose)
-
-            dynamic_route = copy.deepcopy(real_route)
-            env.LongPathPublish(real_route)
-            time.sleep(1.)
-
-            if len(map_plan) == 0:
-                print 'no path'
+            if result > 2:
+                demo_flag = not demo_flag
                 continue
+
+            guidance.update_mem(img_seq, a_seq)
+
+        env.SetObjectPose('robot1', 
+                          [init_pose[0], init_pose[1], 0., init_pose[2]], 
+                          once=True)
+
+        time.sleep(0.1)
+        dynamic_route = copy.deepcopy(real_route)
+        env.LongPathPublish(real_route)
+        time.sleep(0.1)
+
+        pose = env.GetSelfStateGT()
+        if demo_flag:
+            goal = real_route[-1]
+        else:
+            goal = last_position
+        env.target_point = goal
+        env.distance = np.sqrt(np.linalg.norm([pose[0]-goal[0], pose[1]-goal[1]]))
+
+        total_reward = 0
+        prev_action = [0., 0.]
+        epi_q = []
+        loop_time = []
+        t = 0
+        terminal = False
+        img_seq = []
+        a_seq = []
+        reach_flag = False
+        mem_pos = 0
+        while not rospy.is_shutdown():
+            start_time = time.time()
+
+            terminal, result, reward = env.GetRewardAndTerminate(t, 
+                                                    max_step=flags.max_step)
+            total_reward += reward
+            if result == 1:
+                reach_flag = True
+            if result > 1 and demo_flag:
+                break
+            elif not demo_flag and result == 2:
+                break
+
+            rgb_image = env.GetRGBImageObservation()
+            local_goal = env.GetLocalPoint(goal)
+            
 
             pose = env.GetSelfStateGT()
-            target_table_point_list, cmd_list, check_point_list = world.GetCommandPlan(pose, real_route)
-
-            # print 'target_table_point_list:', target_table_point_list
-            print 'cmd_list:', cmd_list
-
-            if len(target_table_point_list) == 0:
-                print 'no check point'
-                continue
-
-            table_goal = target_table_point_list[0]
-            goal = world.Table2RealPosition(table_goal)
-            env.target_point = goal
-            env.distance = np.sqrt(np.linalg.norm([pose[0]-goal[0], pose[1]-goal[1]]))
-
-            total_reward = 0
-            laser = env.GetLaserObservation()
-            laser_stack = np.stack([laser, laser, laser], axis=-1)
-            action = [0., 0.]
-            epi_q = []
-            loop_time = []
-            t = 0
-            terminal = False
-            result = 0
-            cmd_idx = 0
-            status = [0]
-            prev_action = [0., 0.]
-            err_h_epi, err_c_epi = 0., 0.
-            status_cnt = 5
-            if np.random.rand() <= epsilon:
-                true_flag = True
-                print '-------using true actions------'
-            else:
-                true_flag = False
-
-            prev_state = (np.zeros((1, agent.n_hidden)), np.zeros((1, agent.n_hidden)))
-            prev_state_2 = (np.zeros((1, agent.n_hidden)), np.zeros((1, agent.n_hidden)))
-            while not rospy.is_shutdown():
-                start_time = time.time()
-                if t == 0:
-                    print 'current cmd:', cmd_list[cmd_idx]
-                
-                terminal, result, reward = env.GetRewardAndTerminate(t)
-                total_reward += reward
-
-                if t > 0:
-                    status = [1] if result == 1 else [0]
-                    agent.Add2Mem((laser_stack,
-                                   cmd,
-                                   cmd_next,
-                                   cmd_skip,
-                                   prev_action,
-                                   local_goal,
-                                   prev_state_2,
-                                   action, 
-                                   reward,
-                                   terminal,
-                                   status,
-                                   true_action))
-                    prev_state_2 = copy.deepcopy(state_2)
-                    prev_action = copy.deepcopy(action)
-                if result > 1:
-                    break
-                elif result == 1:
-                    if cmd_list[cmd_idx] == 5:
-                        print 'Finish!!!!!!!'
-                        break
-                    cmd_idx += 1
-                    t = 0
-                    status_cnt = 0
-                    table_goal = target_table_point_list[cmd_idx]
-                    goal = world.Table2RealPosition(table_goal)
-                    env.target_point = goal
-                    env.distance = np.sqrt(np.linalg.norm([pose[0]-goal[0], pose[1]-goal[1]]))
-
-                    continue
-
-                local_goal = env.GetLocalPoint(goal)
-                env.PathPublish(local_goal)
-
-                cmd = [cmd_list[cmd_idx]]
-                cmd_next = [cmd_list[cmd_idx]]
-                cmd_skip = [cmd_list[cmd_idx+1]]
-
-                if status_cnt < 5:
-                    cmd = [0]
-                    cmd_skip = [0]
-                else:
-                    cmd_next = [0]
-                status_cnt += 1
-
-                # print '{}, {}, {}'.format(cmd[0], cmd_next[0], cmd_skip[0])
-
-                laser = env.GetLaserObservation()
-                laser_stack = np.stack([laser, laser_stack[:, 0], laser_stack[:, 1]], axis=-1)        
-
-                if not flags.testing:
-                    if noise > 0:
-                        noise -= flags.init_noise/flags.noise_stop_episode
-                        epsilon -= flags.init_epsilon/flags.noise_stop_episode
-
-                time1 = time.time() - start_time
-                
-               
-                # predict action
-                if t > 0:
-                    prev_action = action
-                if cmd_list[cmd_idx] == 5:
-                    local_goal_a = local_goal
-                else:
-                    local_goal_a = [0., 0.]
-                # input_laser, input_cmd, input_cmd_next, prev_status, prev_action, input_goal, prev_state
-                action, state_2 = agent.ActorPredict([laser_stack], 
-                                                    [cmd], 
-                                                    [cmd_next], 
-                                                    [cmd_skip], 
-                                                    [action], 
-                                                    [local_goal_a],
-                                                    prev_state_2)
-
-                if not flags.testing:
-                    if T < flags.noise_stop_episode:
-                        action += (exploration_noise.noise() * np.asarray(agent.action_range) * noise )
+            try:
+                near_goal, dynamic_route = world.GetNextNearGoal(dynamic_route, 
+                                                                 pose)
+            except:
+                pass
+            local_near_goal = env.GetLocalPoint(near_goal)
+            env.PathPublish(local_near_goal)
+            action_gt = env.Controller(local_near_goal, None, 1)
             
-                # get true action
-                pose = env.GetSelfStateGT()
-                near_goal, dynamic_route = world.GetNextNearGoal(dynamic_route, pose)
+            img_seq.append(rgb_image)
+            a_seq.append(action_gt)        
 
-                local_near_goal = env.GetLocalPoint(near_goal)
-                true_action = env.Controller(local_near_goal, None, 1)
+            if not demo_flag:
+                mem_pos, action = guidance.query(rgb_image, mem_pos)
+                print t, mem_pos
+                env.SelfControl(action, [flags.a_linear_range, flags.a_angular_range])
 
-                if true_flag :
-                    action = true_action
+            else:
+                env.SelfControl(action_gt, [0.3, np.pi/6])
 
-                env.SelfControl(action, agent.action_range)
+            t += 1
+            T += 1
+            rate.sleep()
+            loop_time.append(time.time() - start_time)
 
-                time2 = time.time() - start_time - time1
+        # training
+        if not demo_flag:
+            info_train = '| Episode:{:3d}'.format(episode) + \
+                         '| t:{:3d}'.format(t) + \
+                         '| Reach: {:1d}'.format(int(reach_flag)) + \
+                         '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
+                         '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
+            print info_train
 
-                if T > agent.batch_size and not flags.testing:
-                    q = agent.Train()
-                    epi_q.append(np.amax(q))
-
-                if (T + 1) % flags.steps_per_checkpoint == 0 and not flags.testing:
-                    saver.save(sess, os.path.join(model_dir, 'network') , global_step=T+1)
-
-                t += 1
-                T += 1
-                loop_time.append(time.time() - start_time)
-                time3 = time.time() - start_time - time1 - time2
-
-                used_time = time.time() - start_time
-
-                if used_time > 0.04:
-                    print '{:.4f} | {:.4f} | {:.4f} | {:.4f}'.format(time1, time2, time3, used_time)
-                rate.sleep()
-
-
-
-            if T > agent.batch_size and not flags.testing and t > 0:
-                if not true_flag:
-                    summary = sess.run(merged, feed_dict={reward_ph: total_reward,
-                                                          q_ph: np.amax(q),
-                                                          noise_ph: noise,
-                                                          epsilon_ph: epsilon
-                                                          })
-                    summary_writer.add_summary(summary, T)
-                print 'Episode:{:} | Steps:{:} | Reward:{:.2f} | T:{:} | Q:{:.2f} | Loop Time:{:.3f} '.format(
-                                                                                          episode, 
-                                                                                          t, 
-                                                                                          total_reward, 
-                                                                                          T, 
-                                                                                          np.amax(q),
-                                                                                          np.mean(loop_time))
-
-            else: 
-                print 'Episode:{:} | Steps:{:} | Reward:{:.2f} | T:{:} |  Loop Time:{:.3f} '.format(episode, 
-                                                                                                    t, 
-                                                                                                    total_reward, 
-                                                                                                    T,
-                                                                                                    np.mean(loop_time))
             episode += 1
+        else:
+            last_position = pose[:2]
+        demo_flag = not demo_flag
+
 
 if __name__ == '__main__':
-    robot_name = 'robot1'
-    rviz = flags.rviz
-
-    main(robot_name, rviz)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:#
+        main(sess)

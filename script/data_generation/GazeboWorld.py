@@ -17,7 +17,7 @@ from rosgraph_msgs.msg import Clock
 from gazebo_msgs.msg import ModelState, ModelStates
 
 class GazeboWorld():
-    def __init__(self, robot_name):
+    def __init__(self, robot_name, rgb_size=[512, 384], depth_size=[64, 64]):
         rospy.init_node(robot_name+'_GazeboWorld', anonymous=False)
 
         #------------Params--------------------
@@ -34,9 +34,8 @@ class GazeboWorld():
         self.target_point = [0., 0.]
         self.model_states_data = None
         self.robot_name = robot_name
-        self.depth_image_size = [64, 64]
-        # self.rgb_image_size = [64, 64]
-        self.rgb_image_size = [640, 480]
+        self.depth_image_size = depth_size
+        self.rgb_image_size = rgb_size
         self.bridge = CvBridge()
 
         self.object_poses = []
