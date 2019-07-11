@@ -508,7 +508,7 @@ def DataGenerate(data_path, robot_name='robot1'):
 if __name__ == '__main__':
     machine_id = socket.gethostname()
 
-    arg = sys.argv[1]:
+    arg = sys.argv[1]
     print 'data_path: ',  arg
     data_path = arg  
     # data_path = '~/Work/catkin_ws/src/data/vpf_data/'
