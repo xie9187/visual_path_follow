@@ -465,7 +465,7 @@ def DataGenerate(data_path, robot_name='robot1'):
             if result == 1 or result == 2:
                 Data = [action_save]
                 print "save sequence "+str(file_num/len(Data))
-                # LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
+                LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
                 rgb_image_save, action_save = [], []
                 break
             elif result == 4:
@@ -507,7 +507,11 @@ def DataGenerate(data_path, robot_name='robot1'):
 
 if __name__ == '__main__':
     machine_id = socket.gethostname()
-    data_path = '/mnt/Work/catkin_ws/data/vpf_data/'
+
+    arg = sys.argv[1]:
+    print 'data_path: ',  arg
+    data_path = arg  
+    # data_path = '~/Work/catkin_ws/src/data/vpf_data/'
     data_path = os.path.join(data_path, machine_id)
 
     try:
