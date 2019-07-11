@@ -115,9 +115,10 @@ def main(sess, robot_name='robot1'):
 
     # start learning
     training_start_time = time.time()
+    timeout_flag = False
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
-        if episode % 100 == 0:
+        if episode % 100 == 0 or timeout_flag:
             print 'randomising the environment'
             world.RandomTableAndMap()
             world.GetAugMap()
@@ -131,8 +132,13 @@ def main(sess, robot_name='robot1'):
         world.MapObjects(obj_list)
         world.GetAugMap()
 
-        map_route, real_route, init_pose = world.RandomPath()
-        env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
+        try:
+            map_route, real_route, init_pose = world.RandomPath()
+            env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
+            timeout_flag = False
+        except:
+            timeout_flag = True
+            continue
 
         time.sleep(1)
         dynamic_route = copy.deepcopy(real_route)
