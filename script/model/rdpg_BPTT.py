@@ -341,7 +341,6 @@ class RDPG_BPTT(object):
         self.action_range = [flags.a_linear_range, flags.a_angular_range]
         self.buffer_size = flags.buffer_size
         self.gamma = flags.gamma
-        self.sample_seq_len = flags.sample_seq_len
 
         self.actor = Actor(sess=sess,
                            dim_action=self.dim_action,
@@ -406,8 +405,6 @@ class RDPG_BPTT(object):
                 sampled_seq = self.memory[idx]
                 seq_len = len(sampled_seq)
                 
-                # min_seq_len = min(seq_len, self.sample_seq_len)
-                # start = 0 if seq_len <= self.sample_seq_len else np.random.randint(seq_len - self.sample_seq_len+1)
                 for t in xrange(0, seq_len):
                     batch[0][i, t, :, :, :] = sampled_seq[t][0]
                     batch[1][i, t, :] = sampled_seq[t][1]
@@ -435,9 +432,6 @@ class RDPG_BPTT(object):
             return 0.
         else:
             [depth, cmd, prev_a, action, reward, terminate, depth_t1, cmd_t1, prev_a_t1, length] = batch
-
-            # print np.mean(depth, axis=(2,3,4)), terminate, np.mean(depth_t1, axis=(2,3,4)), length
-            # assert False 
 
             target_a = self.actor.PredictSeqTarget(input_depth=depth_t1, 
                                                    input_cmd=cmd_t1, 
