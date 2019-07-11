@@ -82,6 +82,7 @@ class GazeboWorld():
         self.pose_GT_pub = rospy.Publisher(robot_name+'/base_pose_ground_truth',Odometry, queue_size = 10)
         self.dynamic_path_pub = rospy.Publisher(robot_name+'/dynamic_path', Path, queue_size=5)
         self.demo_rgb_img_pub = rospy.Publisher(robot_name+'/camera/rgb/demo',Image, queue_size = 10)
+        self.command_pub = rospy.Publisher(robot_name+'/command',Image, queue_size = 10)
 
         self.object_state_sub = rospy.Subscriber('gazebo/model_states', ModelStates, self.ModelStateCallBack)
         self.laser_sub = rospy.Subscriber('mybot/laser/scan', LaserScan, self.LaserScanCallBack)
@@ -172,17 +173,18 @@ class GazeboWorld():
 
         cv_img[np.isnan(cv_img)] = 0.
         cv_img[cv_img < 0.4] = 0.
-        cv_img/=(10./255.)
 
-        # inpainting
-        mask = copy.deepcopy(cv_img)
-        mask[mask == 0.] = 1.
-        mask[mask != 1.] = 0.
-        mask = np.uint8(mask)
-        cv_img = cv2.inpaint(np.uint8(cv_img), mask, 3, cv2.INPAINT_TELEA)
+        
+        # # inpainting
+        # cv_img/=(10./255.)
+        # mask = copy.deepcopy(cv_img)
+        # mask[mask == 0.] = 1.
+        # mask[mask != 1.] = 0.
+        # mask = np.uint8(mask)
+        # cv_img = cv2.inpaint(np.uint8(cv_img), mask, 3, cv2.INPAINT_TELEA)
 
-        cv_img = np.array(cv_img, dtype=np.float32)
-        cv_img*=(10./255.)
+        # cv_img = np.array(cv_img, dtype=np.float32)
+        # cv_img*=(10./255.)
 
         # cv2 image to ros image and publish
         try:
@@ -202,11 +204,12 @@ class GazeboWorld():
         dim = (self.rgb_image_size[0], self.rgb_image_size[1])
         cv_resized_img = cv2.resize(cv_img, dim, interpolation = cv2.INTER_AREA)
         # cv2 image to ros image and publish
-        try:
-            resized_img = self.bridge.cv2_to_imgmsg(cv_resized_img, "bgr8")
-        except Exception as e:
-            raise e
-        self.resized_rgb_img.publish(resized_img)
+        # try:
+        #     resized_img = self.bridge.cv2_to_imgmsg(cv_resized_img, "bgr8")
+        # except Exception as e:
+        #     raise e
+        # self.resized_rgb_img.publish(resized_img)
+        self.resized_rgb = cv_resized_img
         return cv_resized_img
 
     def PublishDemoRGBImage(self, image_arr, demo_idx):
@@ -257,15 +260,15 @@ class GazeboWorld():
     def GetModelStates(self):
         self.state_call_back_flag = True
         object_list = []
-        skip_objs_text_list = ['ground', 'room', 'robot', 'picture']
+        skip_objs_text_list = ['ground', 'room', 'robot', 'picture', 'wall']
         # [h, w]
-        large_obj_text_dict = {'bookshelf_large': [1, 2],
-                               'desk_drawer': [2, 1],
-                               'sofa_set_3': [1, 2],
-                               'sofa_set_1': [1, 3],
-                               'desk_brown': [1, 2],
-                               'desk_yellow': [1, 2],
-                               'sofa_set_2': [1, 2]} 
+        large_obj_text_dict = {'bookshelf_large': [2, 1],
+                               'desk_drawer_1': [1, 2],
+                               'sofa_set_3_0': [2, 1],
+                               'sofa_set_1': [2, 1],
+                               'desk_brown': [2, 1],
+                               'desk_yellow': [2, 1],
+                               'sofa_set_2': [2, 1]} 
         while self.state_call_back_flag and not rospy.is_shutdown():
             pass
         data = self.model_states_data
@@ -294,6 +297,8 @@ class GazeboWorld():
         return object_list
 
     def SetObjectPose(self, name, pose, once=False):
+        if len(pose) == 3:
+            pose = [pose[0], pose[1], 0., pose[2]]
         object_state = copy.deepcopy(self.default_state)
         object_state.model_name = name
         object_state.pose.position.x = pose[0]
@@ -323,7 +328,6 @@ class GazeboWorld():
         self.PID_X_t = np.array([0., 0.])
         self.PID_X_buff = []
         rospy.sleep(0.5)
-    
 
     def Control(self):
         self.cmd_vel.publish(self.cmd)
@@ -355,15 +359,15 @@ class GazeboWorld():
         self.cmd_vel.publish(Twist())
         rospy.sleep(1)
 
-    def GetRewardAndTerminate(self, t, delta=None, max_step=100):
+    def GetRewardAndTerminate(self, t, delta=None, max_step=100, OA_mode=False):
         terminate = False
         reset = False
         laser_scan = self.GetLaserObservation()
         laser_min = np.amin(laser_scan)
         [x, y, theta] =  self.GetSelfStateGT()
         [v, w] = self.GetSelfSpeedGT()
-        self.pre_distance = copy.deepcopy(self.distance)
-        self.distance = np.sqrt((self.target_point[0] - x)**2 + (self.target_point[1] - y)**2)
+
+
         result = 0
 
         if laser_min < 0.25 / 5.6 - 0.5:
@@ -380,33 +384,39 @@ class GazeboWorld():
                 self.movement_counter = 0.
         self.last_pose = np.array([x, y, theta])
 
-        if delta is None:
-            if t == 0:
-                delta = 0.
-            else:
-                delta = self.pre_distance - self.distance
-        reward = delta * np.cos(w) - 0.01
+        if not OA_mode:
+            self.pre_distance = copy.deepcopy(self.distance)
+            self.distance = np.sqrt((self.target_point[0] - x)**2 + (self.target_point[1] - y)**2)
+            if delta is None:
+                if t == 0:
+                    delta = 0.
+                else:
+                    delta = self.pre_distance - self.distance
+            reward = delta * np.cos(w) - 0.01
+        else:
+            reward = v * np.cos(w) / 5.
 
         if self.stop_counter == 2:
             terminate = True
-            # print 'crash'
+            print 'crash'
             result = 3
             reward = -1.
         if self.movement_counter >= 10:
             terminate = True
-            # print 'stuck'
+            print 'stuck'
             result = 4
             reward = -1.
             self.movement_counter = 0
-        if self.distance < self.target_size:
-            terminate = True
-            result = 1
-            # print 'reach the goal'
-            reward = 1.
+        if not OA_mode:
+            if self.distance < self.target_size:
+                terminate = True
+                result = 1
+                print 'reach the goal'
+                reward = 1.
         if t >= max_step:
             result = 2
             terminate = True
-            # print 'time out'
+            print 'time out'
 
         return terminate, result, reward
 
@@ -425,6 +435,18 @@ class GazeboWorld():
         publisher.publish(content)
         if delay != 0.:
             rospy.sleep(delay)
+
+    def CommandPublish(self, cmd):
+        img = copy.deepcopy(self.resized_rgb)
+        text = ['S', 'R', 'F', 'L']
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        colour = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 255, 255)]
+        cv2.putText(img,text[cmd],(self.rgb_image_size[0]/2, self.rgb_image_size[1]/5*4),font, 4,colour[cmd],2,cv2.LINE_AA)
+        try:
+            resized_img = self.bridge.cv2_to_imgmsg(img, "bgr8")
+        except Exception as e:
+            raise e
+        self.resized_rgb_img.publish(resized_img)
 
     def PathPublish(self, position):
         my_path = Path()

@@ -1,0 +1,15 @@
+<launch>
+  <!-- start world -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find visual_path_follow)/world/1_room.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="false"/>
+    <arg name="headless" value="true"/>
+    <arg name="recording" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
+
+  <!-- include our robots -->
+  <include file="$(find visual_path_follow)/launch/single_robot_state_pub.launch"/>
+</launch>

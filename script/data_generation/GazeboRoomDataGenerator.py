@@ -20,16 +20,14 @@ CWD = os.getcwd()
 
 class GridWorld(object):
     """docstring for GridWorld"""
-    def __init__(self, grid_size=10, table_size=20, P2R=0.1000):
+    def __init__(self, grid_size=10, table_size=10, P2R=0.1000):
         self.table_size = table_size
         self.grid_size = grid_size
         self.map_size = grid_size*table_size
         self.path_width = self.grid_size
-        self.wall_width = 1
         self.p2r = P2R
         self.area = np.array([1, 1])
 
-        self.Clear()
         self.CreateMap()
 
     def Clear(self):
@@ -53,46 +51,131 @@ class GridWorld(object):
         self.DrawHorizontalLine([0, self.table_size], 0, 1)
         self.DrawVerticalLine([0, self.table_size], self.table_size, 1)
         self.DrawHorizontalLine([0, self.table_size], self.table_size, 1)
-        self.DrawVerticalLine([0, self.table_size], self.table_size/2, 1)
-        self.DrawHorizontalLine([0, self.table_size], self.table_size/2, 1)
 
-        self.DrawHorizontalLine([0, 8], 13, 1)
-        self.DrawHorizontalLine([5, 6], 15, 1)
-        self.DrawHorizontalLine([8, 10], 15, 1)
-        self.DrawVerticalLine([13, 18], 3, 1)
-        self.DrawVerticalLine([15, 20], 5, 1)
-        self.DrawVerticalLine([10, 11], 3, 1)
+        # self.DrawHorizontalLine([0, 8], 13, 1)
+        # self.DrawHorizontalLine([5, 6], 15, 1)
+        # self.DrawHorizontalLine([8, 10], 15, 1)
+        # self.DrawVerticalLine([13, 18], 3, 1)
+        # self.DrawVerticalLine([15, 20], 5, 1)
+        # self.DrawVerticalLine([10, 11], 3, 1)
 
-        self.DrawHorizontalLine([12, 18], 15, 1)
+        # self.DrawHorizontalLine([12, 18], 15, 1)
 
-        self.DrawHorizontalLine([2, 8], 3, 1)
-        self.DrawHorizontalLine([2, 8], 7, 1)
-        self.DrawVerticalLine([0, 3], 5, 1)
-        self.DrawVerticalLine([7, 10], 5, 1)
+        # self.DrawHorizontalLine([2, 8], 3, 1)
+        # self.DrawHorizontalLine([2, 8], 7, 1)
+        # self.DrawVerticalLine([0, 3], 5, 1)
+        # self.DrawVerticalLine([7, 10], 5, 1)
 
-        self.DrawHorizontalLine([12, 18], 8, 1)
-        self.DrawHorizontalLine([12, 18], 2, 1)
-        self.DrawVerticalLine([2, 8], 15, 1)
+        # self.DrawHorizontalLine([12, 18], 8, 1)
+        # self.DrawHorizontalLine([12, 18], 2, 1)
+        # self.DrawVerticalLine([2, 8], 15, 1)
 
-    def RandomEnv(self, obj_list):
-        self.area = np.random.randint(0, 2, size=[2])
+    def RandomTableAndMap(self):
+
+        def random_walk(table, T):
+            pos = np.random.randint(len(table), size=2)
+            step = 0
+            cnt = 0
+            for t in xrange(T):
+                if cnt < step:
+                    cnt += 1
+                else:
+                    d = np.random.randint(4)
+                    step = np.random.randint(2, 6)
+                    cnt = 0
+                if d == 0:
+                    if pos[0] + 1 < self.table_size:
+                        pos[0] = pos[0] + 1  
+                    else: 
+                        pos[0] = pos[0] -1
+                        d = (d + 2) % 4
+                elif d == 1:
+                    if pos[1] + 1 < self.table_size:
+                        pos[1] = pos[1] + 1
+                    else:
+                        pos[1] = pos[1] - 1
+                        d = (d + 2) % 4
+                elif d == 2:
+                    if pos[0] - 1 >= 0:
+                        pos[0] = pos[0] - 1
+                    else:
+                        pos[0] = pos[0] + 1
+                        d = (d + 2) % 4
+                else:
+                    if pos[1] - 1 >= 0:
+                        pos[1] = pos[1] - 1
+                    else:
+                        pos[1] = pos[1] + 1
+                        d = (d + 2) % 4
+                table[pos[1], pos[0]] = 0
+            return table
+
+        self.table = np.ones((self.table_size, self.table_size))
+        while sum(sum(self.table)) > self.table_size**2 * 0.8:
+            self.table = np.ones((self.table_size, self.table_size))
+            self.table = random_walk(self.table, 50)
+
+        self.map = np.zeros((self.map_size, self.map_size))
+        for x in xrange(self.table_size):
+            for y in xrange(self.table_size):
+                start_x = x * self.grid_size
+                start_y = y * self.grid_size
+                if self.table[y, x]:
+                    self.map[start_y:start_y+self.grid_size, start_x:start_x+self.grid_size] = 1
+                if not self.check_neighbour_zeros(self.table, [x, y], 1):
+                    self.table[y, x] = 1.5
+
+    def check_neighbour_zeros(self, table, pos, step=1):
+        start_x = max(pos[0] - step, 0)
+        end_x = min(pos[0] + step + 1, len(table))
+        start_y = max(pos[1] - step, 0)
+        end_y = min(pos[1] + step + 1, len(table))
+        return sum(sum(table[start_y:end_y, start_x:end_x] == 0)) 
+
+    def AllocateObject(self, obj_list):
+        spare_y, spare_x = np.where(self.table == 1)
+        spare_space_list = np.split(np.stack([spare_x, spare_y], axis=1), len(spare_x))
         obj_pose_dict = {}
         for obj_info in obj_list:
             name = obj_info['name']
             pose = obj_info['pose']
             size = obj_info['size']
-            map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
             yaw_i = np.random.randint(0, 4)
             if yaw_i in [1, 3]:
                 size = [size[1], size[0]]
-            if size[0]%2 == 0:
-                map_pos[0] -= self.grid_size/2
-            if size[1]%2 == 0:
-                map_pos[1] -= self.grid_size/2
-            real_pos = self.Map2Real(map_pos)
-            real_pose = [real_pos[0], real_pos[1], 0., np.pi/2*yaw_i]
-            obj_pose_dict[name] = real_pose
+
+            for i in range(20):
+                spare_pos = random.sample(spare_space_list, 1)
+                spare_pos = np.squeeze(spare_pos)
+                if size[0] == 2 and spare_pos[0] == self.table_size-1:
+                    continue
+                elif size[0] == 3 and spare_pos[0] in [self.table_size-1, 0]:
+                    continue
+                if size[1] == 2 and spare_pos[1] == self.table_size-1:
+                    continue
+                elif size[1] == 3 and spare_pos[1] in [self.table_size-1, 0]:
+                    continue
+
+                start_x = spare_pos[0]-(size[0]-1)/2
+                end_x = spare_pos[0]+size[0]/2+1
+                start_y = spare_pos[1]-(size[1]-1)/2
+                end_y = spare_pos[1]+size[1]/2+1
+
+                if (self.table[start_y:end_y, start_x:end_x] < 1.).any() :
+                    continue
+                self.table[start_y:end_y, start_x:end_x] = 0.5
+                map_pos = np.array(spare_pos) * self.grid_size + self.grid_size/2 * np.asarray(size)
+                real_pos = self.Map2Real(map_pos)
+                real_pose = [real_pos[0], real_pos[1], 0., np.pi/2*yaw_i]
+                obj_pose_dict[name] = real_pose
+                break
+
+            if i == 19:
+                real_pose = [-2., -2., 0., 0.]
+                obj_pose_dict[name] = real_pose
+
         return obj_pose_dict
+
 
     def MapObjects(self, obj_list):
         for obj_info in obj_list:
@@ -125,19 +208,18 @@ class GridWorld(object):
             # print name+' | real: ({:.3f}, {:.3f}) | map: ({}, {}) | map_centre: ({}, {})'.format(
             #       pose[0], pose[1], map_x, map_y, map_x_centre, map_y_centre)          
             self.map[map_y_min:map_y_max, map_x_min:map_x_max] = 1
-                
 
 
     def Real2Map(self, real_pos):
         x, y, yaw = real_pos
-        map_x = int(x / self.p2r) + 100
-        map_y = int(y / self.p2r) + 100
+        map_x = int(x / self.p2r)
+        map_y = int(y / self.p2r)
         return [map_y, map_x]
 
     def Map2Real(self, map_pos):
-        map_y, map_x = map_pos
-        x = map_x * self.p2r - 10.
-        y = map_y * self.p2r - 10.
+        map_x, map_y = map_pos
+        x = map_x * self.p2r 
+        y = map_y * self.p2r
         return (x, y)
                             
     def GetAugMap(self):
@@ -154,26 +236,85 @@ class GridWorld(object):
                    self.aug_map[y_min:y_max, x_min:x_max]= 1
 
     def RandomPath(self):
-        space = 1.
         map_path = []
         real_path = []
         dist = 0.
-        while space == 1. or len(map_path) < 50:
-            init_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
-            goal_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
-            space = self.aug_map[init_map_pos[0], init_map_pos[1]] * self.aug_map[goal_map_pos[0], goal_map_pos[1]]
+        t = 0
+        while len(map_path) < 50:
+            init_table_pos = np.random.randint(0, self.table_size, size=[2])
+            goal_table_pos = np.random.randint(0, self.table_size, size=[2])
+            if self.check_neighbour_zeros(self.table, init_table_pos) > 4 or self.check_neighbour_zeros(self.table, goal_table_pos) > 4:
+                continue
+            if self.table[init_table_pos[1], init_table_pos[0]] != 0 or self.table[goal_table_pos[1], goal_table_pos[0]] != 0:
+                continue
+            init_map_pos = init_table_pos * self.grid_size + self.grid_size/2
+            goal_map_pos = goal_table_pos * self.grid_size + self.grid_size/2
+            if self.aug_map[init_map_pos[1], init_map_pos[0]] * self.aug_map[goal_map_pos[1], goal_map_pos[0]] == 1:
+                continue
+            map_path, real_path = self.GetPathFromTable([init_table_pos[0], init_table_pos[1], goal_table_pos[0], goal_table_pos[1]])
 
-            map_path, real_path = self.GetPath([init_map_pos[1], init_map_pos[0], goal_map_pos[1], goal_map_pos[0]])
+            t += 1
+            assert t < 50, 'timeout'
 
         init_yaw = np.arctan2(real_path[1][1] - real_path[0][1], real_path[1][0] - real_path[0][0])
         return map_path, real_path, [real_path[0][0], real_path[0][1], init_yaw]
 
+    def RandomInitPose(self):
+        space = 1.
+        while space == 1.:
+            init_map_pos = (self.area * 10 + np.random.randint(0, 10, size=[2])) * self.grid_size + self.grid_size/2
+            space = self.aug_map[init_map_pos[0], init_map_pos[1]]
+        x, y = init_map_pos
+        init_x, init_y = self.Map2Real([x, y])
+        init_yaw = np.random.rand()*np.pi*2 - np.pi
+        return [init_x, init_y, init_yaw]
+
+    def GetPathFromTable(self, se):
+        path_table = copy.deepcopy(self.table)
+        path_table[path_table!=0.] = 1.
+        n = m = self.table_size
+        directions = 4 # number of possible directions to move on the map
+        if directions == 4:
+            dx = [1, 0, -1, 0]
+            dy = [0, 1, 0, -1]
+        elif directions == 8:
+            dx = [1, 1, 0, -1, -1, -1, 0, 1]
+            dy = [0, 1, 1, 1, 0, -1, -1, -1]
+        [xA, yA, xB, yB] = se
+        table_path = pathFind(copy.deepcopy(path_table), directions, dx, dy, xA, yA, xB, yB, n, m)
+        table_route = []
+        x = copy.deepcopy(xA)
+        y = copy.deepcopy(yA)
+
+        def interpolate_in_map(table_start, table_end, step=5):
+            map_start = np.asarray(table_start) * self.grid_size + self.grid_size/2
+            map_end = np.asarray(table_end) * self.grid_size + self.grid_size/2
+            map_path = []
+            for t in xrange(1, step+1):
+                map_path.append((map_start + (map_end - map_start)/step*t).tolist())
+            return map_path
+
+        curr_table_pos = [x, y]
+        map_route = []
+        real_route = []
+        self.path_map = copy.deepcopy(self.map)
+        for t in xrange(len(table_path)):
+            x+=dx[int(table_path[t])]
+            y+=dy[int(table_path[t])]
+            last_table_pos = copy.deepcopy(curr_table_pos)
+            curr_table_pos = [x, y]
+            map_sub_route = interpolate_in_map(last_table_pos, curr_table_pos)
+            map_route += map_sub_route
+            for map_pos in map_sub_route:
+                self.path_map[map_pos[1], map_pos[0]] = 2
+                real_route.append(self.Map2Real(map_pos))
+
+        return map_route, real_route
 
     def GetPath(self, se):
         self.path_map = copy.deepcopy(self.map)
         n = m = self.map_size
         directions = 8 # number of possible directions to move on the map
-
         if directions == 4:
             dx = [1, 0, -1, 0]
             dy = [0, 1, 0, -1]
@@ -207,6 +348,20 @@ class GridWorld(object):
             return path[min_idx], path[min_idx+1:]
         else :
             return path[min_idx], path
+
+    def GetCmd(self, path, step_range=[3,5]):
+        step = np.random.randint(step_range[0], step_range[1])
+        if len(path) > step:      
+            vect_start = [path[1][0] - path[0][0], path[1][1] - path[0][1]]
+            dir_start = np.arctan2(vect_start[1], vect_start[0])
+            vect_end = [path[step][0] - path[step-1][0], path[step][1] - path[step-1][1]]
+            dir_end = np.arctan2(vect_end[1], vect_end[0])
+            direction = np.round(self.wrap2pi(dir_end - dir_start)/np.pi*2)
+            cmd = direction + 2
+        else:
+            cmd = 0
+        return np.uint8(cmd)
+
 
     def wrap2pi(self, ang):
         while ang > np.pi:
@@ -246,9 +401,8 @@ def LogData(Data, image_save, num, path):
 
 
 def DataGenerate(data_path, robot_name='robot1'):
-    world = GridWorld()    
     env = GazeboWorld('robot1')
-    obj_list = env.GetModelStates()
+    world = GridWorld()
     cv2.imwrite('./world/map.png', np.flipud(1-world.map)*255)
 
     FileProcess()
@@ -261,20 +415,16 @@ def DataGenerate(data_path, robot_name='robot1'):
     time.sleep(2.)
     while not rospy.is_shutdown():
         time.sleep(2.)
-
-        
-        world.CreateMap()
-        if episode % 5 == 0:
+        if episode % 20 == 0:
             print 'randomising the environment'
-            obj_pose_dict = world.RandomEnv(obj_list)
+            world.RandomTableAndMap()
+            world.GetAugMap()
+            obj_list = env.GetModelStates()
+            obj_pose_dict = world.AllocateObject(obj_list)
             for name in obj_pose_dict:
                 env.SetObjectPose(name, obj_pose_dict[name])
             time.sleep(2.)
             print 'randomisation finished'
-        obj_list = env.GetModelStates()
-        world.MapObjects(obj_list)
-        world.GetAugMap()
-        
 
         map_route, real_route, init_pose = world.RandomPath()
         env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
@@ -304,7 +454,7 @@ def DataGenerate(data_path, robot_name='robot1'):
         while not rospy.is_shutdown():
             start_time = time.time()
 
-            terminal, result, reward = env.GetRewardAndTerminate(t)
+            terminal, result, reward = env.GetRewardAndTerminate(t, max_step=500)
             total_reward += reward
 
             # log data
@@ -315,14 +465,14 @@ def DataGenerate(data_path, robot_name='robot1'):
             if result == 1 or result == 2:
                 Data = [action_save]
                 print "save sequence "+str(file_num/len(Data))
-                LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
+                # LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
                 rgb_image_save, action_save = [], []
                 break
             elif result == 4:
                 break
 
             local_goal = env.GetLocalPoint(goal)
-            # env.PathPublish(local_goal)
+            
 
             rgb_image = env.GetRGBImageObservation()
 
@@ -332,7 +482,11 @@ def DataGenerate(data_path, robot_name='robot1'):
                 near_goal, dynamic_route = world.GetNextNearGoal(dynamic_route, pose)
             except:
                 pass
+            cmd = world.GetCmd(dynamic_route)
+            env.CommandPublish(cmd)
+
             local_near_goal = env.GetLocalPoint(near_goal)
+            env.PathPublish(local_near_goal)
             action = env.Controller(local_near_goal, None, 1)
 
             env.SelfControl(action, [0.3, np.pi/6])
@@ -363,18 +517,24 @@ if __name__ == '__main__':
 
     DataGenerate(data_path)
 
-    # world = GridWorld()    
+    # fig=plt.figure(figsize=(8, 6))
     # env = GazeboWorld('robot1')
-    # obj_list = env.GetModelStates()
-    # world.MapObjects(obj_list)
+    # world = GridWorld()
+    # world.RandomTableAndMap()
     # world.GetAugMap()
+    # obj_list = env.GetModelStates()
+    # obj_pose_dict = world.AllocateObject(obj_list)
+    # for name in obj_pose_dict:
+    #     env.SetObjectPose(name, obj_pose_dict[name])
+    # time.sleep(2.)
 
     # map_path, real_path, init_pose = world.RandomPath()
+    # env.SetObjectPose('robot1', init_pose)
 
-
-    # fig=plt.figure(figsize=(16, 8))
-    # fig.add_subplot(1, 2, 1)
-    # plt.imshow(world.path_map, origin='lower')
-    # fig.add_subplot(1, 2, 2)
+    # fig.add_subplot(2, 2, 1)
+    # plt.imshow(world.table, origin='lower')
+    # fig.add_subplot(2, 2, 2)
     # plt.imshow(world.aug_map, origin='lower')
+    # fig.add_subplot(2, 2, 3)
+    # plt.imshow(world.path_map, origin='lower')
     # plt.show()

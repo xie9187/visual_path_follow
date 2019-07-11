@@ -108,12 +108,14 @@ def dense_layer(inputs,
                scope,
                trainable=True,
                activation=tf.nn.leaky_relu,
+               w_init=tf.contrib.layers.xavier_initializer(),
+               b_init=tf.zeros_initializer(),
                reuse=False):
     outputs = tf.contrib.layers.fully_connected(inputs=inputs,
                                                 num_outputs=hidden_num,
                                                 activation_fn=activation,
-                                                weights_initializer=tf.contrib.layers.xavier_initializer(),
-                                                biases_initializer=tf.zeros_initializer(),
+                                                weights_initializer=w_init,
+                                                biases_initializer=b_init,
                                                 reuse=reuse,
                                                 trainable=trainable,
                                                 scope=scope or 'dense'
@@ -165,13 +167,12 @@ def batch_norm(self, x, is_training=True, name=None):
 
 
 # Algorithm
-def reinforce(x, reward, n_hidden=500, scope=None):
+def reward_estimate(x, reward, n_hidden=500, scope=None):
     with tf.variable_scope(scope or 'REINFORCE_layer'):
         # important: stop the gradients
         x = tf.stop_gradient(x)
         reward = tf.stop_gradient(reward)
         # baseline: central
-        # init = tf.constant(2.9428)
         init = tf.constant(0.)
         baseline_c = tf.get_variable('baseline_c', initializer=init)
         # baseline: data dependent
@@ -180,15 +181,14 @@ def reinforce(x, reward, n_hidden=500, scope=None):
                 linear(
                     tf.sigmoid(linear(
                         x, n_hidden, True, scope='l1')),
-                    n_hidden,
-                    True,
-                    scope='l2')),
+                        n_hidden,
+                        True,
+                        scope='l2')),
                 1,
                 True,
                 scope='l3'))
 
         reward = reward - baseline_c - baseline_x
-        # reward = reward - baseline_x
 
     return reward
 
