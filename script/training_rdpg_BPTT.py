@@ -52,7 +52,6 @@ flag.DEFINE_string('model_name', "rdpg_bptt", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 10000, 'How many training steps to do per checkpoint.')
 flag.DEFINE_integer('buffer_size', 500, 'The size of Buffer')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
-flag.DEFINE_integer('sample_seq_len', 5, 'sampled sequence length')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 
 # noise param
@@ -118,7 +117,7 @@ def main(sess, robot_name='robot1'):
     training_start_time = time.time()
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
-        if episode % 20 == 0:
+        if episode % 100 == 0:
             print 'randomising the environment'
             world.RandomTableAndMap()
             world.GetAugMap()
