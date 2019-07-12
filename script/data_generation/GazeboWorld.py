@@ -424,10 +424,11 @@ class GazeboWorld():
         x = pose[0]
         y = pose[1]
         theta = pose[2]
-        local_path = copy.deepcopy(path)
+        local_path = []
         for t in xrange(0, len(path)):
-            local_path[t][0] = (path[t][0] - x) * np.cos(theta) + (path[t][1] - y) * np.sin(theta)
-            local_path[t][1] = -(path[t][0] - x) * np.sin(theta) + (path[t][1] - y) * np.cos(theta)
+            x_t = (path[t][0] - x) * np.cos(theta) + (path[t][1] - y) * np.sin(theta)
+            y_t = -(path[t][0] - x) * np.sin(theta) + (path[t][1] - y) * np.cos(theta)
+            local_path.append([x_t, y_t])
         return local_path
 
 
