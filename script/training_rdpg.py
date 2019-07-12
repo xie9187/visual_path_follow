@@ -44,6 +44,7 @@ flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
+flag.DEFINE_string('rnn_type', 'lstm', 'Type of RNN (lstm, gru).')
 
 # training param
 flag.DEFINE_integer('total_steps', 1000000, 'Total training steps.')
@@ -93,9 +94,11 @@ def main(sess, robot_name='robot1'):
         reward_ph = tf.placeholder(tf.float32, [], name='reward')
         q_ph = tf.placeholder(tf.float32, [], name='q_pred')
         err_h_ph = tf.placeholder(tf.float32, [], name='err_h')
+        err_c_ph = tf.placeholder(tf.float32, [], name='err_c')
         tf.summary.scalar('reward', reward_ph)
         tf.summary.scalar('q_estimate', q_ph)
         tf.summary.scalar('err_h', err_h_ph)
+        tf.summary.scalar('err_c', err_c_ph)
         merged = tf.summary.merge_all()
         summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
@@ -154,11 +157,13 @@ def main(sess, robot_name='robot1'):
         depth_stack = np.stack([depth_img, depth_img, depth_img], axis=-1)
         ref_action = [0., 0.]
         goal = [0., 0.]
-        gru_h_in = np.zeros([1, flags.n_hidden])
+        rnn_h_in = [np.zeros([1, flags.n_hidden]),
+                    np.zeros([1, flags.n_hidden])] if flags.rnn_type == 'lstm' else np.zeros([1, flags.n_hidden])
 
         total_reward = 0
         epi_q = []
         epi_err_h = []
+        epi_err_c = []
         loop_time = []
         action = [0., 0.]
         t = 0
@@ -170,7 +175,14 @@ def main(sess, robot_name='robot1'):
             total_reward += reward
 
             if t > 0:
-                agent.Add2Mem([depth_stack, [cmd], prev_a, local_next_goal, gru_h_in[0], action, reward, terminate])
+                agent.Add2Mem([depth_stack, 
+                               [cmd], 
+                               prev_a, 
+                               local_next_goal, 
+                               [rnn_h_in[0][0], rnn_h_in[1][0]] if flags.rnn_type == 'lstm' else rnn_h_in[0], 
+                               action, 
+                               reward, 
+                               terminate])
 
             rgb_image = env.GetRGBImageObservation()
             depth_img = env.GetDepthImageObservation()
@@ -190,26 +202,28 @@ def main(sess, robot_name='robot1'):
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
-            action, gru_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], gru_h_in)
+            action, rnn_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], rnn_h_in)
             action += (exploration_noise.noise() * np.asarray(agent.action_range))
 
             # action = env.Controller(local_near_goal, None, 1)
-            
+
             env.SelfControl(action, [0.3, np.pi/6])
             
             if (T + 1) % flags.steps_per_checkpoint == 0 and not flags.test:
                 saver.save(sess, os.path.join(model_dir, 'network') , global_step=episode)
 
             if T > agent.batch_size and not flags.test:
-                q, err_h = agent.Train()
+                q, err_h, err_c = agent.Train()
                 epi_q.append(np.amax(q))
                 epi_err_h.append(err_h)
-
+                epi_err_c.append(err_c)
+                
             if terminate:
                 if T > agent.batch_size and not flags.test:
                     summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                           q_ph: np.amax(q),
-                                                          err_h_ph: np.mean(epi_err_h)})
+                                                          err_h_ph: np.mean(epi_err_h),
+                                                          err_c_ph: np.mean(epi_err_c)})
                     summary_writer.add_summary(summary, T)
                 info_train = '| Episode:{:3d}'.format(episode) + \
                              '| t:{:3d}'.format(t) + \
@@ -225,7 +239,7 @@ def main(sess, robot_name='robot1'):
 
             t += 1
             T += 1
-            gru_h_in = gru_h_out
+            rnn_h_in = rnn_h_out
             rate.sleep()
             loop_time.append(time.time() - start_time)
 
@@ -245,7 +259,8 @@ def model_test(sess):
     for episode in xrange(1, 200):
         print episode
         q_list = []
-        gru_h_in = np.zeros([1, flags.n_hidden])
+        rnn_h_in = [np.zeros([1, flags.n_hidden]),
+                    np.zeros([1, flags.n_hidden])] if flags.rnn_type == 'lstm' else np.zeros([1, flags.n_hidden])
         for t in xrange(0, flags.max_epi_step):
             term = True if t == flags.max_epi_step - 1 else False
             depth = np.ones([flags.dim_depth_h, flags.dim_depth_w, flags.dim_depth_c])*t/np.float(flags.max_epi_step)
@@ -257,14 +272,14 @@ def model_test(sess):
                       cmd,
                       prev_a,
                       goal, 
-                      gru_h_in[0],
+                      [rnn_h_in[0][0], rnn_h_in[1][0]] if flags.rnn_type == 'lstm' else rnn_h_in[0],
                       action, 
                       1./flags.max_epi_step, 
                       term]
             agent.Add2Mem(sample)
 
             if T > agent.batch_size:
-                q, err_h = agent.Train()
+                q, err_h, err_c = agent.Train()
                 q_list.append(np.amax(q))
             T += 1
         if T > agent.batch_size:

@@ -3,7 +3,9 @@ import numpy as np
 import os
 import copy
 import time
+import random
 import utils.model_utils as model_utils
+from tensorflow.python.ops.rnn_cell import LSTMStateTuple
 
 class Actor(object):
     def __init__(self,
@@ -18,7 +20,8 @@ class Actor(object):
                  action_range,
                  tau,
                  learning_rate,
-                 batch_size
+                 batch_size,
+                 rnn_type
                  ):
 
         self.sess = sess
@@ -33,21 +36,26 @@ class Actor(object):
         self.n_cmd_type = n_cmd_type
         self.tau = tau
         self.batch_size = batch_size
+        self.rnn_type = rnn_type
 
         with tf.variable_scope('actor'):
             self.input_depth = tf.placeholder(tf.float32, [None]+self.dim_img, name='input_depth') # b*l, h, w, c
             self.input_cmd = tf.placeholder(tf.int32, [None, self.dim_cmd], name='input_cmd')
             self.input_prev_a = tf.placeholder(tf.float32, [None, self.dim_action], name='input_prev_a')
-            self.gru_h_in = tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='gru_h_in') # b, n_hidden
+            if self.rnn_type == 'lstm':
+                self.rnn_h_in = LSTMStateTuple(tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='initial_state.c'),
+                                               tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='initial_state.h'))
+            else:
+                self.rnn_h_in = tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='rnn_h_in') # b, n_hidden
 
-            inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.gru_h_in]
+            inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.rnn_h_in]
 
             with tf.variable_scope('online'):
-                self.a_online, self.gru_h_out_online = self.Model(inputs)
+                self.a_online, self.rnn_h_out_online = self.Model(inputs)
             self.network_params = tf.trainable_variables()
 
             with tf.variable_scope('target'):
-                self.a_target, self.gru_h_out_target = self.Model(inputs)
+                self.a_target, self.rnn_h_out_target = self.Model(inputs)
             self.target_network_params = tf.trainable_variables()[len(self.network_params):]
 
         # Op for periodically updating target network with online network weights
@@ -69,7 +77,7 @@ class Actor(object):
         self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
 
     def Model(self, inputs):
-        input_depth, input_cmd, input_prev_a, gru_h_in = inputs
+        input_depth, input_cmd, input_prev_a, rnn_h_in = inputs
         # encode depth image
         conv1 = model_utils.conv2d(input_depth, 4, 5, 4, scope='conv1', max_pool=False)
         conv2 = model_utils.conv2d(conv1, 16, 5, 4, scope='conv2', max_pool=False)
@@ -86,41 +94,44 @@ class Actor(object):
 
         input_vect = tf.concat([depth_vect, cmd_vect, prev_a_vect], axis=1)
 
-        # gru
-        gru_cell = model_utils._gru_cell(self.n_hidden, 1, name='gru_cell')
-        gru_output, gru_h_out = gru_cell(input_vect, self.gru_h_in)
+        # rnn
+        if self.rnn_type == 'lstm':
+            rnn_cell = model_utils._lstm_cell(self.n_hidden, 1, name='rnn_cell')
+        else:
+            rnn_cell = model_utils._gru_cell(self.n_hidden, 1, name='rnn_cell')
+        rnn_output, rnn_h_out = rnn_cell(input_vect, self.rnn_h_in)
         # action
-        a_linear = model_utils.dense_layer(gru_output, 1, 'a_linear', 
+        a_linear = model_utils.dense_layer(rnn_output, 1, 'a_linear', 
                                            activation=tf.nn.sigmoid) * self.action_range[0]
-        a_angular = model_utils.dense_layer(gru_output, 1, 'a_angular', 
+        a_angular = model_utils.dense_layer(rnn_output, 1, 'a_angular', 
                                             activation=tf.nn.tanh) * self.action_range[1]
         pred_action = tf.concat([a_linear, a_angular], axis=1)
 
-        return pred_action, gru_h_out
+        return pred_action, rnn_h_out
 
-    def Train(self, input_depth, input_cmd, input_prev_a, gru_h_in, a_gradient):
+    def Train(self, input_depth, input_cmd, input_prev_a, rnn_h_in, a_gradient):
         return self.sess.run(self.optimize, feed_dict={
             self.input_depth: input_depth,
             self.input_cmd: input_cmd,
             self.input_prev_a: input_prev_a,
-            self.gru_h_in: gru_h_in,
+            self.rnn_h_in: rnn_h_in,
             self.a_gradient: a_gradient
             })
 
-    def PredictTarget(self, input_depth, input_cmd, input_prev_a, gru_h_in):
-        return self.sess.run([self.a_target, self.gru_h_out_target], feed_dict={
+    def PredictTarget(self, input_depth, input_cmd, input_prev_a, rnn_h_in):
+        return self.sess.run([self.a_target, self.rnn_h_out_target], feed_dict={
             self.input_depth: input_depth,
             self.input_cmd: input_cmd,
             self.input_prev_a: input_prev_a,
-            self.gru_h_in: gru_h_in
+            self.rnn_h_in: rnn_h_in
             })
 
-    def PredictOnline(self, input_depth, input_cmd, input_prev_a, gru_h_in):
-        return self.sess.run([self.a_online, self.gru_h_out_online], feed_dict={
+    def PredictOnline(self, input_depth, input_cmd, input_prev_a, rnn_h_in):
+        return self.sess.run([self.a_online, self.rnn_h_out_online], feed_dict={
             self.input_depth: input_depth,
             self.input_cmd: input_cmd,
             self.input_prev_a: input_prev_a,
-            self.gru_h_in: gru_h_in
+            self.rnn_h_in: rnn_h_in
             })
 
     def UpdateTarget(self):
@@ -283,6 +294,7 @@ class RDPG(object):
         self.action_range = [flags.a_linear_range, flags.a_angular_range]
         self.buffer_size = flags.buffer_size
         self.gamma = flags.gamma
+        self.rnn_type = flags.rnn_type
 
         self.actor = Actor(sess=sess,
                            dim_action=self.dim_action,
@@ -295,7 +307,8 @@ class RDPG(object):
                            action_range=self.action_range,
                            tau=self.tau,
                            learning_rate=self.a_learning_rate,
-                           batch_size=self.batch_size)
+                           batch_size=self.batch_size,
+                           rnn_type=self.rnn_type)
 
         self.critic = Critic(sess=sess,
                              dim_action=self.dim_action,
@@ -316,7 +329,7 @@ class RDPG(object):
                                 {'name': 'cmd', 'dim': [self.batch_size, self.dim_cmd], 'type': np.int32},
                                 {'name': 'prev_a', 'dim': [self.batch_size, self.dim_action], 'type': np.float32},
                                 {'name': 'goal', 'dim': [self.batch_size, self.dim_goal], 'type': np.float32},
-                                {'name': 'gru_h_in', 'dim': [self.batch_size, self.n_hidden], 'type': np.float32},
+                                {'name': 'rnn_h_in', 'dim': [self.batch_size, self.n_hidden], 'type': np.float32},
                                 {'name': 'action', 'dim': [self.batch_size, self.dim_action], 'type': np.float32},
                                 {'name': 'reward', 'dim': [self.batch_size], 'type': np.float32},
                                 {'name': 'terminate', 'dim': [self.batch_size], 'type': bool},
@@ -324,33 +337,45 @@ class RDPG(object):
                                 {'name': 'cmd_t1:', 'dim': [self.batch_size, self.dim_cmd], 'type': np.float32},
                                 {'name': 'prev_a_t1', 'dim': [self.batch_size, self.dim_action], 'type': np.float32},
                                 {'name': 'goal_t1', 'dim': [self.batch_size, self.dim_goal], 'type': np.float32},
-                                {'name': 'gru_h_in_t1', 'dim': [self.batch_size, self.n_hidden], 'type': np.float32}]
+                                {'name': 'rnn_h_in_t1', 'dim': [self.batch_size, self.n_hidden], 'type': np.float32}]
 
-    def ActorPredict(self, input_depth, input_cmd, input_prev_a, gru_h_in):
-        a, gru_h_out = self.actor.PredictOnline(input_depth=input_depth, 
+    def ActorPredict(self, input_depth, input_cmd, input_prev_a, rnn_h_in):
+        a, rnn_h_out = self.actor.PredictOnline(input_depth=input_depth, 
                                                 input_cmd=input_cmd,
                                                 input_prev_a=input_prev_a, 
-                                                gru_h_in=gru_h_in)
-        return a[0], gru_h_out
+                                                rnn_h_in=rnn_h_in)
+        return a[0], rnn_h_out
 
     def Add2Mem(self, sample):
-        self.memory.append(sample) # (depth_t, cmd_t, prev_a_t, goal_t, gru_h_in_t, action_t, r_t, terminate_t)
+        self.memory.append(sample) # (depth_t, cmd_t, prev_a_t, goal_t, rnn_h_in_t, action_t, r_t, terminate_t)
         if len(self.memory) > self.buffer_size:
             self.memory.pop(0)
 
     def SampleBatch(self):
         if len(self.memory) >= self.batch_size:
-            indices = np.random.randint(0, len(self.memory)-1, size=self.batch_size)
+            indices = random.sample(range(0, len(self.memory)-1), self.batch_size)
 
             batch = []
             for info in self.batch_info_list:
-                batch.append(np.empty(info['dim'], dtype=info['type']))
+                if self.rnn_type is 'lstm' and 'rnn_h_in' in info['name']:
+                    batch.append([np.empty(info['dim'], dtype=info['type']),
+                                  np.empty(info['dim'], dtype=info['type'])]) 
+                else:
+                    batch.append(np.empty(info['dim'], dtype=info['type']))
             for i, idx in enumerate(indices):
                 end = len(self.batch_info_list)/2+2
-                for j in xrange(end): 
-                    batch[j][i] = self.memory[idx][j]
+                for j in xrange(end):
+                    if self.rnn_type is 'lstm' and 'rnn_h_in' in self.batch_info_list[j]['name']:
+                        batch[j][0][i] = self.memory[idx][j][0]
+                        batch[j][1][i] = self.memory[idx][j][1]
+                    else:
+                        batch[j][i] = self.memory[idx][j]
                 for j in xrange(end, len(self.batch_info_list)):
-                    batch[j][i] = self.memory[idx+1][j-end]
+                    if self.rnn_type is 'lstm' and 'rnn_h_in' in self.batch_info_list[j]['name']:
+                        batch[j][0][i] = self.memory[idx+1][j-end][0]
+                        batch[j][1][i] = self.memory[idx+1][j-end][1]
+                    else:
+                        batch[j][i] = self.memory[idx+1][j-end]
             return batch, indices
         else:
             print 'samples are not enough'
@@ -364,13 +389,13 @@ class RDPG(object):
         if not batch:
             return 0.
         else:
-            [depth, cmd, prev_a, goal, gru_h_in, action, reward, terminate,
-             depth_t1, cmd_t1, prev_a_t1, goal_t1, gru_h_in_t1] = batch
+            [depth, cmd, prev_a, goal, rnn_h_in, action, reward, terminate,
+             depth_t1, cmd_t1, prev_a_t1, goal_t1, rnn_h_in_t1] = batch
 
             a_target, _ = self.actor.PredictTarget(input_depth=depth_t1, 
                                                    input_cmd=cmd_t1,
                                                    input_prev_a=prev_a_t1, 
-                                                   gru_h_in=gru_h_in_t1)
+                                                   rnn_h_in=rnn_h_in_t1)
 
             target_q = self.critic.PredictTarget(input_depth=depth_t1, 
                                                  input_cmd=cmd_t1,
@@ -398,13 +423,13 @@ class RDPG(object):
                                      y=y)
 
             # actions for a_gradients from critic
-            a_online, gru_h_out = self.actor.PredictOnline(input_depth=depth, 
+            a_online, rnn_h_out = self.actor.PredictOnline(input_depth=depth, 
                                                            input_cmd=cmd,
                                                            input_prev_a=prev_a, 
-                                                           gru_h_in=gru_h_in)
+                                                           rnn_h_in=rnn_h_in)
 
             # memeory states update
-            err_h = self.UpdateState(gru_h_out, indices)
+            err_h, err_c = self.UpdateState(rnn_h_out, indices)
 
             # actor update
             a_gradient = self.critic.ActionGradients(input_depth=depth, 
@@ -415,7 +440,7 @@ class RDPG(object):
             self.actor.Train(input_depth=depth, 
                              input_cmd=cmd,
                              input_prev_a=prev_a, 
-                             gru_h_in=gru_h_in, 
+                             rnn_h_in=rnn_h_in, 
                              a_gradient=a_gradient[0])
 
             train_time = time.time() - start_time - sample_time - y_time
@@ -432,13 +457,24 @@ class RDPG(object):
             #                                                                                         train_time,
             #                                                                                         target_time)
             
-            return q, err_h
+            return q, err_h, err_c
 
-    def UpdateState(self, gru_h_in_batch, indices):
+    def UpdateState(self, rnn_h_in_batch, indices):
         err_h = 0.
-        for idx, sample_id in enumerate(indices):
-            gru_h_in = gru_h_in_batch[idx]
-            if not self.memory[sample_id][-1]:
-                err_h += np.mean(np.fabs(self.memory[sample_id+1][4] - gru_h_in))
-                self.memory[sample_id+1][4] = gru_h_in
-        return err_h/len(indices)
+        err_c = 0.
+        if self.rnn_type == 'lstm':
+            for idx, sample_id in enumerate(indices):
+                rnn_h_in_h = rnn_h_in_batch[0][idx]
+                rnn_h_in_c = rnn_h_in_batch[1][idx]
+                if not self.memory[sample_id][-1]:
+                    err_h += np.mean(np.fabs(self.memory[sample_id+1][4][0] - rnn_h_in_h))
+                    err_c += np.mean(np.fabs(self.memory[sample_id+1][4][1] - rnn_h_in_c))
+                    self.memory[sample_id+1][4][0] = rnn_h_in_h
+                    self.memory[sample_id+1][4][1] = rnn_h_in_c
+        else:
+            for idx, sample_id in enumerate(indices):
+                rnn_h_in = rnn_h_in_batch[idx]
+                if not self.memory[sample_id][-1]:
+                    err_h += np.mean(np.fabs(self.memory[sample_id+1][4] - rnn_h_in))
+                    self.memory[sample_id+1][4] = rnn_h_in
+        return err_h/len(indices), err_c/len(indices)
