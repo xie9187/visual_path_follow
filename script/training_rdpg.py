@@ -182,7 +182,7 @@ def main(sess, robot_name='robot1'):
                 env.LongPathPublish(dynamic_route)
             except:
                 pass
-            cmd, next_goal = world.GetCmd(dynamic_route)
+            cmd, next_goal = world.GetCmd(dynamic_route, next_goal)
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
             env.CommandPublish(cmd)
@@ -208,6 +208,7 @@ def main(sess, robot_name='robot1'):
                     summary_writer.add_summary(summary, T)
                 info_train = '| Episode:{:3d}'.format(episode) + \
                              '| t:{:3d}'.format(t) + \
+                             '| T:{:5d}'.format(T) + \
                              '| Reward:{:.3f}'.format(total_reward) + \
                              '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
                              '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))

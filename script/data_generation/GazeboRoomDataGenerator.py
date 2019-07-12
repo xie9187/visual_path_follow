@@ -349,7 +349,7 @@ class GridWorld(object):
         else :
             return path[min_idx], path
 
-    def GetCmd(self, path, step_range=[3,5]):
+    def GetCmd(self, path, step_range=[3,5], last_goal=None):
         step = np.random.randint(step_range[0], step_range[1])
         # get command
         if len(path) > step:      
@@ -372,8 +372,10 @@ class GridWorld(object):
                 if np.fabs(direction) == 1:
                     break
             next_goal = path[t]
-        else:
+        elif len(path) > 0:
             next_goal = path[-1]
+        else:
+            next_goal = last_goal
         return np.uint8(cmd), next_goal
 
 
