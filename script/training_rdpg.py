@@ -182,7 +182,7 @@ def main(sess, robot_name='robot1'):
                 env.LongPathPublish(dynamic_route)
             except:
                 pass
-            cmd, next_goal = world.GetCmd(dynamic_route, next_goal)
+            cmd, next_goal = world.GetCmd(dynamic_route, prev_goal=next_goal)
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
             env.CommandPublish(cmd)
