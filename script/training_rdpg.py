@@ -130,7 +130,6 @@ def main(sess, robot_name='robot1'):
             time.sleep(1.)
             print 'randomisation finished'
         obj_list = env.GetModelStates()
-        world.MapObjects(obj_list)
         world.GetAugMap()
 
         try:
@@ -139,7 +138,7 @@ def main(sess, robot_name='robot1'):
             timeout_flag = False
         except:
             timeout_flag = True
-            print 'timeout'
+            print 'random path timeout'
             continue
 
 
