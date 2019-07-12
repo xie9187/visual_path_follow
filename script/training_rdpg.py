@@ -129,8 +129,6 @@ def main(sess, robot_name='robot1'):
                 env.SetObjectPose(name, obj_pose_dict[name])
             time.sleep(1.)
             print 'randomisation finished'
-        obj_list = env.GetModelStates()
-        world.GetAugMap()
 
         try:
             map_route, real_route, init_pose = world.RandomPath()
