@@ -185,11 +185,16 @@ def main(sess, robot_name='robot1'):
             cmd, next_goal = world.GetCmd(dynamic_route, prev_goal=next_goal)
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
+            env.PathPublish(local_next_goal)
+            local_near_goal = env.GetLocalPoint(near_goal)
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
             action, gru_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], gru_h_in)
             action += (exploration_noise.noise() * np.asarray(agent.action_range))
+
+            # action = env.Controller(local_near_goal, None, 1)
+            
             env.SelfControl(action, [0.3, np.pi/6])
             
             if (T + 1) % flags.steps_per_checkpoint == 0 and not flags.test:
