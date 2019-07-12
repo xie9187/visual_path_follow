@@ -351,6 +351,7 @@ class GridWorld(object):
 
     def GetCmd(self, path, step_range=[3,5]):
         step = np.random.randint(step_range[0], step_range[1])
+        # get command
         if len(path) > step:      
             vect_start = [path[1][0] - path[0][0], path[1][1] - path[0][1]]
             dir_start = np.arctan2(vect_start[1], vect_start[0])
@@ -360,7 +361,20 @@ class GridWorld(object):
             cmd = direction + 2
         else:
             cmd = 0
-        return np.uint8(cmd)
+        # get next goal
+        if len(path) >= 3:
+            for t in xrange(len(path)-2):
+                vect_curr = [path[t+1][0] - path[t][0], path[t+1][1] - path[t][1]]
+                dir_curr = np.arctan2(vect_curr[1], vect_curr[0])
+                vect_next = [path[t+2][0] - path[t+1][0], path[t+2][1] - path[t+1][1]]
+                dir_next = np.arctan2(vect_next[1], vect_next[0])
+                direction = np.round(self.wrap2pi(dir_next - dir_curr)/np.pi*2)
+                if np.fabs(direction) == 1:
+                    break
+            next_goal = path[t]
+        else:
+            next_goal = path[-1]
+        return np.uint8(cmd), next_goal
 
 
     def wrap2pi(self, ang):

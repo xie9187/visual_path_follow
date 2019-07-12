@@ -52,7 +52,7 @@ class GazeboWorld():
         self.laser_cb_num = 0
 
         self.robot_size = 0.5
-        self.target_size = 0.1
+        self.target_size = 0.3
         self.target_theta_range = np.pi/3
 
         #-----------Default Robot State-----------------------

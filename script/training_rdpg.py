@@ -145,9 +145,10 @@ def main(sess, robot_name='robot1'):
         time.sleep(1.)
 
         pose = env.GetSelfStateGT()
-        goal = real_route[-1]
-        env.target_point = goal
-        env.distance = np.sqrt(np.linalg.norm([pose[0]-goal[0], pose[1]-goal[1]]))
+        cmd, next_goal = world.GetCmd(dynamic_route)
+        local_next_goal = env.Global2Local([next_goal], pose)
+        env.target_point = next_goal
+        env.distance = np.sqrt(np.linalg.norm([pose[0]-local_next_goal[0], local_next_goal[1]-local_next_goal[1]]))
 
         depth_img = env.GetDepthImageObservation()
         depth_stack = np.stack([depth_img, depth_img, depth_img], axis=-1)
@@ -169,7 +170,7 @@ def main(sess, robot_name='robot1'):
             total_reward += reward
 
             if t > 0:
-                agent.Add2Mem([depth_stack, [cmd], prev_a, goal, gru_h_in[0], action, reward, terminate])
+                agent.Add2Mem([depth_stack, [cmd], prev_a, local_next_goal, gru_h_in[0], action, reward, terminate])
 
             rgb_image = env.GetRGBImageObservation()
             depth_img = env.GetDepthImageObservation()
@@ -181,7 +182,9 @@ def main(sess, robot_name='robot1'):
                 env.LongPathPublish(dynamic_route)
             except:
                 pass
-            cmd = world.GetCmd(dynamic_route)
+            cmd, next_goal = world.GetCmd(dynamic_route)
+            env.target_point = next_goal
+            local_next_goal = env.Global2Local([next_goal], pose)
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
