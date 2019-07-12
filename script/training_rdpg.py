@@ -146,7 +146,7 @@ def main(sess, robot_name='robot1'):
 
         pose = env.GetSelfStateGT()
         cmd, next_goal = world.GetCmd(dynamic_route)
-        local_next_goal = env.Global2Local([next_goal], pose)
+        local_next_goal = env.Global2Local([next_goal], pose)[0]
         env.target_point = next_goal
         env.distance = np.sqrt(np.linalg.norm([pose[0]-local_next_goal[0], local_next_goal[1]-local_next_goal[1]]))
 
@@ -184,7 +184,7 @@ def main(sess, robot_name='robot1'):
                 pass
             cmd, next_goal = world.GetCmd(dynamic_route)
             env.target_point = next_goal
-            local_next_goal = env.Global2Local([next_goal], pose)
+            local_next_goal = env.Global2Local([next_goal], pose)[0]
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
