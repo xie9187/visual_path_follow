@@ -21,7 +21,7 @@ class Actor(object):
                  tau,
                  learning_rate,
                  batch_size,
-                 rnn_type
+                 rnn_type,
                  ):
 
         self.sess = sess
@@ -47,6 +47,7 @@ class Actor(object):
                                                tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='initial_state.h'))
             else:
                 self.rnn_h_in = tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='rnn_h_in') # b, n_hidden
+            self.label_action = tf.placeholder(tf.float32, [None, dim_action], name='label_action') # b, 2
 
             inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.rnn_h_in]
 
@@ -73,6 +74,10 @@ class Actor(object):
         # Optimization Op by applying gradient, variable pairs
         self.optimize = tf.train.AdamOptimizer(self.learning_rate). \
             apply_gradients(zip(self.gradients, self.network_params))
+
+        # supervised optimisation
+        loss = tf.losses.mean_squared_error(labels=self.label_action, predictions=self.a_online)
+        self.optimize_supervised = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
         self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
 
@@ -108,6 +113,15 @@ class Actor(object):
         pred_action = tf.concat([a_linear, a_angular], axis=1)
 
         return pred_action, rnn_h_out
+
+    def Train_supervised(self, input_depth, input_cmd, input_prev_a, rnn_h_in, label_action):
+        return self.sess.run(self.optimize_supervised, feed_dict={
+            self.input_depth: input_depth,
+            self.input_cmd: input_cmd,
+            self.input_prev_a: input_prev_a,
+            self.rnn_h_in: rnn_h_in,
+            self.label_action: label_action
+            })
 
     def Train(self, input_depth, input_cmd, input_prev_a, rnn_h_in, a_gradient):
         return self.sess.run(self.optimize, feed_dict={
@@ -295,6 +309,7 @@ class RDPG(object):
         self.buffer_size = flags.buffer_size
         self.gamma = flags.gamma
         self.rnn_type = flags.rnn_type
+        self.supervision = flags.supervision
 
         self.actor = Actor(sess=sess,
                            dim_action=self.dim_action,
@@ -432,16 +447,23 @@ class RDPG(object):
             err_h, err_c = self.UpdateState(rnn_h_out, indices)
 
             # actor update
-            a_gradient = self.critic.ActionGradients(input_depth=depth, 
-                                                     input_cmd=cmd,
-                                                     input_prev_a=prev_a, 
-                                                     input_goal=goal, 
-                                                     input_action=a_online)
-            self.actor.Train(input_depth=depth, 
-                             input_cmd=cmd,
-                             input_prev_a=prev_a, 
-                             rnn_h_in=rnn_h_in, 
-                             a_gradient=a_gradient[0])
+            if self.supervision:
+                self.actor.Train_supervised(input_depth=depth, 
+                                            input_cmd=cmd,
+                                            input_prev_a=prev_a, 
+                                            rnn_h_in=rnn_h_in,
+                                            label_action=action)
+            else:
+                a_gradient = self.critic.ActionGradients(input_depth=depth, 
+                                                         input_cmd=cmd,
+                                                         input_prev_a=prev_a, 
+                                                         input_goal=goal, 
+                                                         input_action=a_online)
+                self.actor.Train(input_depth=depth, 
+                                 input_cmd=cmd,
+                                 input_prev_a=prev_a, 
+                                 rnn_h_in=rnn_h_in, 
+                                 a_gradient=a_gradient[0])
 
             train_time = time.time() - start_time - sample_time - y_time
 

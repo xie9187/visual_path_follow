@@ -44,7 +44,7 @@ flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
-flag.DEFINE_string('rnn_type', 'lstm', 'Type of RNN (lstm, gru).')
+flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
 
 # training param
 flag.DEFINE_integer('total_steps', 1000000, 'Total training steps.')
@@ -54,6 +54,7 @@ flag.DEFINE_integer('steps_per_checkpoint', 10000, 'How many training steps to d
 flag.DEFINE_integer('buffer_size', 10000, 'The size of Buffer')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
+flag.DEFINE_boolean('supervision', False, 'supervised learning')
 
 # noise param
 flag.DEFINE_float('mu', 0., 'mu')
@@ -168,13 +169,14 @@ def main(sess, robot_name='robot1'):
         action = [0., 0.]
         t = 0
         terminate = False
+        test_cnt = 1
         while not rospy.is_shutdown():
             start_time = time.time()
 
             terminate, result, reward = env.GetRewardAndTerminate(t, max_step=flags.max_epi_step)
             total_reward += reward
 
-            if t > 0:
+            if t > 0 and not (flags.supervision and test_cnt%10 == 0):
                 agent.Add2Mem([depth_stack, 
                                [cmd], 
                                prev_a, 
@@ -201,11 +203,12 @@ def main(sess, robot_name='robot1'):
             local_near_goal = env.GetLocalPoint(near_goal)
             env.CommandPublish(cmd)
 
-            prev_a = copy.deepcopy(action)
-            action, rnn_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], rnn_h_in)
-            action += (exploration_noise.noise() * np.asarray(agent.action_range))
-
-            # action = env.Controller(local_near_goal, None, 1)
+            if flags.supervision:
+                action = env.Controller(local_near_goal, None, 1)
+            else:
+                prev_a = copy.deepcopy(action)
+                action, rnn_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], rnn_h_in)
+                action += (exploration_noise.noise() * np.asarray(agent.action_range))
 
             env.SelfControl(action, [0.3, np.pi/6])
             
@@ -218,7 +221,7 @@ def main(sess, robot_name='robot1'):
                 epi_err_h.append(err_h)
                 epi_err_c.append(err_c)
                 
-            if terminate:
+            if result == 2 or len(dynamic_route) == 0 and not (flags.supervision and test_cnt%10 != 0):
                 if T > agent.batch_size and not flags.test:
                     summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                           q_ph: np.amax(q),
@@ -235,6 +238,7 @@ def main(sess, robot_name='robot1'):
 
                 episode += 1
                 T += 1
+                test_cnt += 1
                 break
 
             t += 1
