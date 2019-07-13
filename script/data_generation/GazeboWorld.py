@@ -398,12 +398,12 @@ class GazeboWorld():
 
         if self.stop_counter == 2:
             terminate = True
-            print 'crash'
+            # print 'crash'
             result = 3
             reward = -1.
         if self.movement_counter >= 10:
             terminate = True
-            print 'stuck'
+            # print 'stuck'
             result = 4
             reward = -1.
             self.movement_counter = 0
@@ -416,7 +416,7 @@ class GazeboWorld():
         if t >= max_step:
             result = 2
             terminate = True
-            print 'time out'
+            # print 'time out'
 
         return terminate, result, reward
 

@@ -41,6 +41,7 @@ class Actor(object):
             self.input_prev_a = tf.placeholder(tf.float32, [None, self.dim_action], name='input_prev_a')
             self.gru_h_in = tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='gru_h_in') # b, n_hidden
             self.length = tf.placeholder(tf.int32, [self.batch_size], name='length') # b
+            self.label_action = tf.placeholder(tf.float32, [None, dim_action], name='label_action') # b, 2
 
             inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.gru_h_in]
 
@@ -67,6 +68,12 @@ class Actor(object):
         # Optimization Op by applying gradient, variable pairs
         self.optimize = tf.train.AdamOptimizer(self.learning_rate). \
             apply_gradients(zip(self.gradients, self.network_params))
+
+        # supervised optimisation
+        mask = tf.reshape(tf.sequence_mask(self.length, maxlen=self.max_step, dtype=tf.float32), [-1, 1]) # b*l, 1
+        mask = tf.concat([mask, mask], axis=1) # b*l, 2
+        loss = tf.losses.mean_squared_error(labels=self.label_action, predictions=self.a_online*mask)
+        self.optimize_supervised = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
         self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
 
@@ -113,6 +120,15 @@ class Actor(object):
                                             activation=tf.nn.tanh) * self.action_range[1]
         action_test = tf.concat([a_linear, a_angular], axis=1)
         return action, action_test, gru_h_out
+
+    def Train_supervised(self, input_depth, input_cmd, input_prev_a, label_action, length):
+        return self.sess.run(self.optimize_supervised, feed_dict={
+            self.input_depth: input_depth,
+            self.input_cmd: input_cmd,
+            self.input_prev_a: input_prev_a,
+            self.label_action: label_action,
+            self.length: length
+            })
 
     def Train(self, input_depth, input_cmd, input_prev_a, a_gradient, length):
         input_depth = np.reshape(input_depth, [-1]+self.dim_img)
@@ -470,19 +486,27 @@ class RDPG_BPTT(object):
                                                   input_prev_a=prev_a, 
                                                   length=length)
 
-            # a_gradients
-            a_gradients = self.critic.ActionGradients(input_depth=depth, 
-                                                      input_cmd=cmd, 
-                                                      input_prev_a=prev_a, 
-                                                      input_action=action, 
-                                                      length=length)
-
             # actor update
-            self.actor.Train(input_depth=depth, 
-                             input_cmd=cmd, 
-                             input_prev_a=prev_a,  
-                             a_gradient=a_gradients, 
-                             length=length)
+            if self.supervision:
+                self.actor.Train_supervised(input_depth=depth, 
+                                            input_cmd=cmd,
+                                            input_prev_a=prev_a, 
+                                            label_action=action,
+                                            length=length)
+            else:
+                # a_gradients
+                a_gradients = self.critic.ActionGradients(input_depth=depth, 
+                                                          input_cmd=cmd, 
+                                                          input_prev_a=prev_a, 
+                                                          input_action=action, 
+                                                          length=length)
+
+                # actor update
+                self.actor.Train(input_depth=depth, 
+                                 input_cmd=cmd, 
+                                 input_prev_a=prev_a,  
+                                 a_gradient=a_gradients, 
+                                 length=length)
 
             train_time = time.time() - start_time - sample_time - y_time
 

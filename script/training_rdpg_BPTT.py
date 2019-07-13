@@ -27,7 +27,6 @@ flag.DEFINE_integer('batch_size', 16, 'Batch size to use during training.')
 flag.DEFINE_float('a_learning_rate', 1e-4, 'Actor learning rate.')
 flag.DEFINE_float('c_learning_rate', 1e-3, 'Critic learning rate.')
 flag.DEFINE_integer('max_epi_step', 200, 'max step.')
-flag.DEFINE_integer('max_training_step', 100000, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
 flag.DEFINE_integer('n_cmd_type', 4, 'number of cmd class.')
@@ -44,15 +43,17 @@ flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
+flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
 
 # training param
-flag.DEFINE_integer('total_steps', 1000000, 'Total training steps.')
+flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "rdpg_bptt", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 10000, 'How many training steps to do per checkpoint.')
 flag.DEFINE_integer('buffer_size', 500, 'The size of Buffer')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
+flag.DEFINE_boolean('supervision', False, 'supervised learning')
 
 # noise param
 flag.DEFINE_float('mu', 0., 'mu')
@@ -143,10 +144,10 @@ def main(sess, robot_name='robot1'):
         time.sleep(1.)
 
         pose = env.GetSelfStateGT()
-        goal = real_route[-1]
-        env.target_point = goal
-        env.distance = np.sqrt(np.linalg.norm([pose[0]-goal[0], pose[1]-goal[1]]))
-
+        cmd, next_goal = world.GetCmd(dynamic_route)
+        local_next_goal = env.Global2Local([next_goal], pose)[0]
+        env.target_point = next_goal
+        env.distance = np.sqrt(np.linalg.norm([pose[0]-local_next_goal[0], local_next_goal[1]-local_next_goal[1]]))
         
         depth_img = env.GetDepthImageObservation()
         depth_stack = np.stack([depth_img, depth_img, depth_img], axis=-1)
@@ -180,19 +181,35 @@ def main(sess, robot_name='robot1'):
                 env.LongPathPublish(dynamic_route)
             except:
                 pass
-            cmd = world.GetCmd(dynamic_route)
+            cmd, next_goal = world.GetCmd(dynamic_route, prev_goal=next_goal)
+            env.target_point = next_goal
+            local_next_goal = env.Global2Local([next_goal], pose)[0]
+            env.PathPublish(local_next_goal)
+            local_near_goal = env.GetLocalPoint(near_goal)
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
             action, gru_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], gru_h_in)
             action += (exploration_noise.noise() * np.asarray(agent.action_range))
+
+            if flags.supervision and (episode+1)%10 != 0:
+                action = env.Controller(local_near_goal, None, 1)
+
             env.SelfControl(action, [0.3, np.pi/6])
-            
+
             if (T + 1) % flags.steps_per_checkpoint == 0 and not flags.test:
                 saver.save(sess, os.path.join(model_dir, 'network') , global_step=episode)
 
-            if terminate:
-                agent.Add2Mem(data_seq)
+            if flags.supervision:
+                print_flag = True if (result >= 2 or len(dynamic_route) == 0) and (episode+1)%10 == 0 else False
+            else:
+                print_flag = True if terminate else False
+
+            if (flags.supervision and (result >= 2 or len(dynamic_route) == 0)) or \
+               (not flags.supervision and terminate):
+                if not (flags.supervision and (episode+1)%10 == 0)
+                    agent.Add2Mem(data_seq)
+
                 if episode >= agent.batch_size and not flags.test:
                     for train_t in range(2):
                         q = agent.Train()
@@ -201,13 +218,14 @@ def main(sess, robot_name='robot1'):
                                                               q_ph: np.amax(q)
                                                               })
                         summary_writer.add_summary(summary, T)
-                info_train = '| Episode:{:3d}'.format(episode) + \
-                             '| t:{:3d}'.format(t) + \
-                             '| T:{:5d}'.format(T) + \
-                             '| Reward:{:.3f}'.format(total_reward) + \
-                             '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
-                             '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
-                print info_train
+                if print_flag:
+                    info_train = '| Episode:{:3d}'.format(episode) + \
+                                 '| t:{:3d}'.format(t) + \
+                                 '| T:{:5d}'.format(T) + \
+                                 '| Reward:{:.3f}'.format(total_reward) + \
+                                 '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
+                                 '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
+                    print info_train
                 episode += 1
                 T += 1
                 break
