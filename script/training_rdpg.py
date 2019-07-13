@@ -203,12 +203,13 @@ def main(sess, robot_name='robot1'):
             local_near_goal = env.GetLocalPoint(near_goal)
             env.CommandPublish(cmd)
 
+            prev_a = copy.deepcopy(action)
+            action, rnn_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], rnn_h_in)
+            action += (exploration_noise.noise() * np.asarray(agent.action_range))
+            
             if flags.supervision:
                 action = env.Controller(local_near_goal, None, 1)
-            else:
-                prev_a = copy.deepcopy(action)
-                action, rnn_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], rnn_h_in)
-                action += (exploration_noise.noise() * np.asarray(agent.action_range))
+
 
             env.SelfControl(action, [0.3, np.pi/6])
             
