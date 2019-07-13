@@ -243,6 +243,9 @@ def main(sess, robot_name='robot1'):
                 episode += 1
                 T += 1
                 test_cnt += 1
+                
+            if (flags.supervision and (result == 2 or len(dynamic_route) == 0)) or /
+               (not flags.supervision and terminate):
                 break
 
             t += 1
