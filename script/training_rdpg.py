@@ -169,14 +169,13 @@ def main(sess, robot_name='robot1'):
         action = [0., 0.]
         t = 0
         terminate = False
-        test_cnt = 1
         while not rospy.is_shutdown():
             start_time = time.time()
 
             terminate, result, reward = env.GetRewardAndTerminate(t, max_step=flags.max_epi_step)
             total_reward += reward
 
-            if t > 0 and not (flags.supervision and test_cnt%10 == 0):
+            if t > 0 and not (flags.supervision and (episode+1)%10 == 0):
                 agent.Add2Mem([depth_stack, 
                                [cmd], 
                                prev_a, 
@@ -207,7 +206,7 @@ def main(sess, robot_name='robot1'):
             action, rnn_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], rnn_h_in)
             action += (exploration_noise.noise() * np.asarray(agent.action_range))
 
-            if flags.supervision:
+            if flags.supervision and (episode+1)%10 != 0:
                 action = env.Controller(local_near_goal, None, 1)
 
             env.SelfControl(action, [0.3, np.pi/6])
@@ -222,7 +221,7 @@ def main(sess, robot_name='robot1'):
                 epi_err_c.append(err_c)
             
             if flags.supervision:
-                print_flag = True if (result == 2 or len(dynamic_route) == 0) and test_cnt == 0 else False
+                print_flag = True if (result >= 2 or len(dynamic_route) == 0) and (episode+1)%10 == 0 else False
             else:
                 print_flag = True if terminate else False
             if print_flag:
@@ -240,11 +239,10 @@ def main(sess, robot_name='robot1'):
                              '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
                 print info_train
 
-            if (flags.supervision and (result == 2 or len(dynamic_route) == 0)) or \
+            if (flags.supervision and (result >= 2 or len(dynamic_route) == 0)) or \
                (not flags.supervision and terminate):
                 episode += 1
                 T += 1
-                test_cnt += 1
                 break
 
             t += 1
