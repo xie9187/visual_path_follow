@@ -206,10 +206,9 @@ def main(sess, robot_name='robot1'):
             prev_a = copy.deepcopy(action)
             action, rnn_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], rnn_h_in)
             action += (exploration_noise.noise() * np.asarray(agent.action_range))
-            
+
             if flags.supervision:
                 action = env.Controller(local_near_goal, None, 1)
-
 
             env.SelfControl(action, [0.3, np.pi/6])
             
@@ -221,8 +220,12 @@ def main(sess, robot_name='robot1'):
                 epi_q.append(np.amax(q))
                 epi_err_h.append(err_h)
                 epi_err_c.append(err_c)
-                
-            if result == 2 or len(dynamic_route) == 0 and not (flags.supervision and test_cnt%10 != 0):
+            
+            if flags.supervision:
+                print_flag = True if (result == 2 or len(dynamic_route) == 0) and test_cnt == 0 else False
+            else:
+                print_flag = True if terminate else False
+            if print_flag:
                 if T > agent.batch_size and not flags.test:
                     summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                           q_ph: np.amax(q),

@@ -411,8 +411,8 @@ class GazeboWorld():
             if self.distance < self.target_size:
                 terminate = True
                 result = 1
-                print 'reach the goal'
-                reward = 1.
+                # print 'reach the goal'
+                # reward = 1.
         if t >= max_step:
             result = 2
             terminate = True
