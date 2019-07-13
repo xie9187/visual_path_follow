@@ -207,7 +207,7 @@ def main(sess, robot_name='robot1'):
 
             if (flags.supervision and (result >= 2 or len(dynamic_route) == 0)) or \
                (not flags.supervision and terminate):
-                if not (flags.supervision and (episode+1)%10 == 0)
+                if not (flags.supervision and (episode+1)%10 == 0):
                     agent.Add2Mem(data_seq)
 
                 if episode >= agent.batch_size and not flags.test:
