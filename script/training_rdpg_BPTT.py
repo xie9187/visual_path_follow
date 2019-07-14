@@ -212,8 +212,10 @@ def main(sess, robot_name='robot1'):
                     agent.Add2Mem(data_seq)
 
                 if episode >= agent.batch_size and not flags.test:
+                    training_step_start_time = time.time()
                     for train_t in range(2):
                         q = agent.Train()
+                    training_step_time = time.time() - training_step_start_time
                     if t > 1:
                         summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                               q_ph: np.amax(q)
@@ -225,7 +227,8 @@ def main(sess, robot_name='robot1'):
                                  '| T:{:5d}'.format(T) + \
                                  '| Reward:{:.3f}'.format(total_reward) + \
                                  '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
-                                 '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
+                                 '| LoopTime(s): {:.3f}'.format(np.mean(loop_time) + \
+                                 '| LoopTime(s): {:.3f}'.format(training_step_time))
                     print info_train
                 episode += 1
                 T += 1
