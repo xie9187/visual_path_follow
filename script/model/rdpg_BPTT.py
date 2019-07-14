@@ -219,6 +219,7 @@ class Critic(object):
                  tau,
                  learning_rate,
                  batch_size,
+                 gpu_num
                  ):
 
         self.sess = sess
@@ -234,6 +235,7 @@ class Critic(object):
         self.num_actor_vars = num_actor_vars
         self.tau = tau
         self.batch_size = batch_size
+        self.gpu_num = gpu_num
 
         with tf.variable_scope('critic', reuse=tf.AUTO_REUSE):
             self.input_depth = tf.placeholder(tf.float32, [None]+self.dim_img, name='input_depth') # b*l, h, w, c
@@ -420,7 +422,7 @@ class RDPG_BPTT(object):
                            tau=self.tau,
                            learning_rate=self.a_learning_rate,
                            batch_size=self.batch_size,
-                           gpu_num=gpu_num)
+                           gpu_num=self.gpu_num)
 
         self.critic = Critic(sess=sess,
                              dim_action=self.dim_action,
@@ -435,7 +437,7 @@ class RDPG_BPTT(object):
                              tau=self.tau,
                              learning_rate=self.c_learning_rate,
                              batch_size=self.batch_size,
-                             gpu_num=gpu_num)
+                             gpu_num=self.gpu_num)
 
         self.memory = []
         self.batch_info_list = [{'name': 'depth', 'dim': [self.batch_size, self.max_step]+self.dim_img, 'type': np.float32},
