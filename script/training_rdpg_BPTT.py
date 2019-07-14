@@ -205,7 +205,7 @@ def main(sess, robot_name='robot1'):
                 print_flag = True if (result >= 2 or len(dynamic_route) == 0) and (episode+1)%10 == 0 else False
             else:
                 print_flag = True if terminate else False
-                
+
             training_step_time = 0.
             if (flags.supervision and (result >= 2 or len(dynamic_route) == 0)) or \
                (not flags.supervision and terminate):
@@ -228,8 +228,8 @@ def main(sess, robot_name='robot1'):
                                  '| T:{:5d}'.format(T) + \
                                  '| Reward:{:.3f}'.format(total_reward) + \
                                  '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
-                                 '| LoopTime(s): {:.3f}'.format(np.mean(loop_time) + \
-                                 '| LoopTime(s): {:.3f}'.format(training_step_time))
+                                 '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
+                                 '| LoopTime(s): {:.3f}'.format(training_step_time)
                     print info_train
                 episode += 1
                 T += 1
