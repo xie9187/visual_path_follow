@@ -229,7 +229,7 @@ def main(sess, robot_name='robot1'):
                                  '| Reward:{:.3f}'.format(total_reward) + \
                                  '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
                                  '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
-                                 '| LoopTime(s): {:.3f}'.format(training_step_time)
+                                 '| OpStepT(s): {:.3f}'.format(training_step_time)
                     print info_train
                 episode += 1
                 T += 1
