@@ -42,11 +42,11 @@ class Actor(object):
             self.input_cmd = tf.placeholder(tf.int32, [None, self.dim_cmd], name='input_cmd')
             self.input_prev_a = tf.placeholder(tf.float32, [None, self.dim_action], name='input_prev_a')
             self.gru_h_in = tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='gru_h_in') # b, n_hidden
-            self.length = tf.placeholder(tf.int32, [self.batch_size/self.gpu_num], name='length') # b
+            self.length = tf.placeholder(tf.int32, [self.batch_size], name='length') # b
             self.label_action = tf.placeholder(tf.float32, [None, dim_action], name='label_action') # b, 2
 
-            inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.gru_h_in]
-            with tf.variable_scope('online', reuse=tf.AUTO_REUSE):
+            inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.gru_h_in, self.length]
+            with tf.variable_scope('online'):
                 self.a_online, _, _ = self.MultiGPUModel(inputs)
                 with tf.device(tf.DeviceSpec(device_type="GPU", device_index=0)):
                     _, self.a_test, self.gru_h_out = self.Model(inputs)
@@ -104,7 +104,7 @@ class Actor(object):
         return outputs
 
     def Model(self, inputs):
-        input_depth, input_cmd, input_prev_a, gru_h_in = inputs
+        input_depth, input_cmd, input_prev_a, gru_h_in, length = inputs
         # encode depth image
         conv1 = model_utils.conv2d(input_depth, 4, 5, 4, scope='conv1', max_pool=False)
         conv2 = model_utils.conv2d(conv1, 16, 5, 4, scope='conv2', max_pool=False)
@@ -124,10 +124,10 @@ class Actor(object):
 
         # training
         shape = input_vect.get_shape().as_list()
-        input_vect_reshape = tf.reshape(input_vect, [self.batch_size/self.gpu_num, self.max_step, shape[-1]])
+        input_vect_reshape = tf.reshape(input_vect, [-1, self.max_step, shape[-1]])
         gru_output, _ = tf.nn.dynamic_rnn(gru_cell, 
                                           input_vect_reshape, 
-                                          sequence_length=self.length,
+                                          sequence_length=length,
                                           dtype=tf.float32) # b, l, h
         gru_output_reshape = tf.reshape(gru_output, [-1, self.n_hidden]) # b*l, h
         # action
@@ -245,9 +245,9 @@ class Critic(object):
             self.input_prev_a = tf.placeholder(tf.float32, [None, self.dim_action], name='input_prev_a')
             self.input_action = tf.placeholder(tf.float32, [None, self.dim_action], name='input_action') # b*l, 2
             self.gru_h_in = tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='gru_h_in') # b, n_hidden
-            self.length = tf.placeholder(tf.int32, [self.batch_size/self.gpu_num], name='length') # b
+            self.length = tf.placeholder(tf.int32, [self.batch_size], name='length') # b
 
-            inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.input_action, self.gru_h_in]
+            inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.input_action, self.gru_h_in, self.length]
 
             with tf.variable_scope('online'):
                 self.q_online  = self.MultiGPUModel(inputs)
@@ -257,18 +257,18 @@ class Critic(object):
                 self.q_target = self.MultiGPUModel(inputs)
             self.target_network_params = tf.trainable_variables()[(len(self.network_params) + num_actor_vars):]
 
-        self.y = tf.placeholder(tf.float32, [self.batch_size/self.gpu_num, self.max_step, 1], name='y')
+        self.y = tf.placeholder(tf.float32, [self.batch_size, self.max_step, 1], name='y')
         self.mask = tf.expand_dims(tf.sequence_mask(self.length, maxlen=self.max_step, dtype=tf.float32), axis=2) # b, l, 1
-        self.square_diff = tf.pow((self.y - tf.reshape(self.q_online, (self.batch_size/self.gpu_num, self.max_step, 1)))*self.mask, 2) # b, l, 1
+        self.square_diff = tf.pow((self.y - tf.reshape(self.q_online, (self.batch_size, self.max_step, 1)))*self.mask, 2) # b, l, 1
 
         self.loss_t = tf.reduce_sum(self.square_diff, reduction_indices=1) / tf.cast(self.length, tf.float32)# b, 1
-        self.loss_n = tf.reduce_sum(self.loss_t, reduction_indices=0) / (self.batch_size/self.gpu_num) # 1
+        self.loss_n = tf.reduce_sum(self.loss_t, reduction_indices=0) / self.batch_size # 1
 
         self.gradient = tf.gradients(self.loss_n, self.network_params)
         self.opt = tf.train.AdamOptimizer(self.learning_rate)
         self.optimize = self.opt.apply_gradients(zip(self.gradient, self.network_params))
 
-        mask_reshape = tf.reshape(self.mask, (self.batch_size/self.gpu_num*self.max_step, 1)) # b*l, 1
+        mask_reshape = tf.reshape(self.mask, (self.batch_size*self.max_step, 1)) # b*l, 1
         self.a_gradient_mask = tf.tile(mask_reshape, [1, 2]) # b*l, 2
         self.action_grads = tf.gradients(self.q_online, self.input_action) * self.a_gradient_mask
 
@@ -302,7 +302,7 @@ class Critic(object):
         return outputs
 
     def Model(self, inputs):
-        input_depth, input_cmd, input_prev_a, input_action, gru_h_in = inputs
+        input_depth, input_cmd, input_prev_a, input_action, gru_h_in, length = inputs
         # encode depth image
         conv1 = model_utils.conv2d(input_depth, 4, 5, 4, scope='conv1', max_pool=False)
         conv2 = model_utils.conv2d(conv1, 16, 5, 4, scope='conv2', max_pool=False)
@@ -321,10 +321,10 @@ class Critic(object):
         input_vect = tf.concat([depth_vect, cmd_vect, prev_a_vect, action_vect], axis=1) 
         rnn_cell = model_utils._lstm_cell(self.n_hidden, 1, name='gru_cell')
         shape = input_vect.get_shape().as_list()
-        input_vect_reshape = tf.reshape(input_vect, [self.batch_size/self.gpu_num, self.max_step, shape[-1]])
+        input_vect_reshape = tf.reshape(input_vect, [-1, self.max_step, shape[-1]])
         rnn_output, _ = tf.nn.dynamic_rnn(rnn_cell, 
                                           input_vect_reshape, 
-                                          sequence_length=self.length,
+                                          sequence_length=length,
                                           dtype=tf.float32) # b, l, h
         rnn_output_reshape = tf.reshape(rnn_output, [-1, self.n_hidden]) # b*l, h
         # q
