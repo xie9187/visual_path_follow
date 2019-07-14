@@ -214,7 +214,7 @@ def main(sess, robot_name='robot1'):
 
                 if episode >= agent.batch_size and not flags.test:
                     training_step_start_time = time.time()
-                    for train_t in range(2):
+                    for train_t in range(1):
                         q = agent.Train()
                     training_step_time = time.time() - training_step_start_time
                     if t > 1:
