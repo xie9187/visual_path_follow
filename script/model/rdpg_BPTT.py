@@ -358,6 +358,7 @@ class RDPG_BPTT(object):
         self.action_range = [flags.a_linear_range, flags.a_angular_range]
         self.buffer_size = flags.buffer_size
         self.gamma = flags.gamma
+        self.supervision = flags.supervision
 
         self.actor = Actor(sess=sess,
                            dim_action=self.dim_action,
