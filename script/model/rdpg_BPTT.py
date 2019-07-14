@@ -19,7 +19,8 @@ class Actor(object):
                  action_range,
                  tau,
                  learning_rate,
-                 batch_size
+                 batch_size,
+                 gpu_num
                  ):
 
         self.sess = sess
@@ -34,6 +35,7 @@ class Actor(object):
         self.n_cmd_type = n_cmd_type
         self.tau = tau
         self.batch_size = batch_size
+        self.gpu_num = gpu_num
 
         with tf.variable_scope('actor', reuse=tf.AUTO_REUSE):
             self.input_depth = tf.placeholder(tf.float32, [None]+self.dim_img, name='input_depth') # b*l, h, w, c
@@ -44,13 +46,12 @@ class Actor(object):
             self.label_action = tf.placeholder(tf.float32, [None, dim_action], name='label_action') # b, 2
 
             inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.gru_h_in]
-
             with tf.variable_scope('online'):
-                self.a_online, self.a_test, self.gru_h_out = self.Model(inputs)
+                self.a_online, self.a_test, self.gru_h_out = self.MultiGPUModel(inputs)
             self.network_params = tf.trainable_variables()
 
             with tf.variable_scope('target'):
-                self.a_target, _, _ = self.Model(inputs)
+                self.a_target, _, _ = self.MultiGPUModel(inputs)
             self.target_network_params = tf.trainable_variables()[len(self.network_params):]
 
         # Op for periodically updating target network with online network weights
@@ -76,6 +77,27 @@ class Actor(object):
         self.optimize_supervised = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
         self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
+
+    def MultiGPUModel(self, inputs):
+        # build model with multi-gpu parallely
+        splited_inputs_list = []
+        splited_outputs_list = [[], [], []]
+        for var in inputs:
+            splited_inputs_list.append(tf.split(var, self.gpu_num, axis=0))
+        for i in range(self.gpu_num):
+            with tf.device(tf.DeviceSpec(device_type="GPU", device_index=i)):
+                with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+                    inputs_per_gpu = []
+                    for splited_input in splited_inputs_list:
+                        inputs_per_gpu.append(splited_input[i]) 
+                    outputs_per_gpu = self.Model(inputs_per_gpu)
+                    for idx, splited_output in enumerate(outputs_per_gpu):
+                        splited_outputs_list[idx].append(splited_output)
+        outputs = []
+        for splited_output_list in splited_outputs_list:
+            combiend_output = tf.concat(splited_output_list, axis=0)
+            outputs.append(combiend_output)
+        return outputs
 
     def Model(self, inputs):
         input_depth, input_cmd, input_prev_a, gru_h_in = inputs
@@ -119,7 +141,7 @@ class Actor(object):
         a_angular = model_utils.dense_layer(gru_output, 1, 'a_angular', 
                                             activation=tf.nn.tanh) * self.action_range[1]
         action_test = tf.concat([a_linear, a_angular], axis=1)
-        return action, action_test, gru_h_out
+        return [action, action_test, gru_h_out]
 
     def Train_supervised(self, input_depth, input_cmd, input_prev_a, label_action, length):
         return self.sess.run(self.optimize_supervised, feed_dict={
@@ -359,6 +381,7 @@ class RDPG_BPTT(object):
         self.buffer_size = flags.buffer_size
         self.gamma = flags.gamma
         self.supervision = flags.supervision
+        self.gpu_num = gpu_num
 
         self.actor = Actor(sess=sess,
                            dim_action=self.dim_action,
@@ -371,7 +394,8 @@ class RDPG_BPTT(object):
                            action_range=self.action_range,
                            tau=self.tau,
                            learning_rate=self.a_learning_rate,
-                           batch_size=self.batch_size)
+                           batch_size=self.batch_size,
+                           gpu_num=gpu_num)
 
         self.critic = Critic(sess=sess,
                              dim_action=self.dim_action,
@@ -385,7 +409,8 @@ class RDPG_BPTT(object):
                              num_actor_vars=len(self.actor.network_params)+len(self.actor.target_network_params),
                              tau=self.tau,
                              learning_rate=self.c_learning_rate,
-                             batch_size=self.batch_size)
+                             batch_size=self.batch_size,
+                             gpu_num=gpu_num)
 
         self.memory = []
         self.batch_info_list = [{'name': 'depth', 'dim': [self.batch_size, self.max_step]+self.dim_img, 'type': np.float32},

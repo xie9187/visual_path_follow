@@ -44,6 +44,7 @@ flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
 flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
+flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
 
 # training param
 flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
