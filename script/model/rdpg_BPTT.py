@@ -97,6 +97,8 @@ class Actor(object):
         for splited_output_list in splited_outputs_list:
             combiend_output = tf.concat(splited_output_list, axis=0)
             outputs.append(combiend_output)
+        if len(outputs) == 1:
+            outputs = outputs[0]
         return outputs
 
     def Model(self, inputs):
@@ -244,11 +246,11 @@ class Critic(object):
             inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.input_action, self.gru_h_in]
 
             with tf.variable_scope('online'):
-                self.q_online  = self.Model(inputs)
+                self.q_online  = self.MultiGPUModel(inputs)
             self.network_params = tf.trainable_variables()[num_actor_vars:]
 
             with tf.variable_scope('target'):
-                self.q_target = self.Model(inputs)
+                self.q_target = self.MultiGPUModel(inputs)
             self.target_network_params = tf.trainable_variables()[(len(self.network_params) + num_actor_vars):]
 
         self.y = tf.placeholder(tf.float32, [self.batch_size, self.max_step, 1], name='y')
@@ -271,6 +273,29 @@ class Critic(object):
             [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) + \
                                                   tf.multiply(self.target_network_params[i], 1. - self.tau))
              for i in range(len(self.target_network_params))] 
+
+    def MultiGPUModel(self, inputs):
+        # build model with multi-gpu parallely
+        splited_inputs_list = []
+        splited_outputs_list = [[]]
+        for var in inputs:
+            splited_inputs_list.append(tf.split(var, self.gpu_num, axis=0))
+        for i in range(self.gpu_num):
+            with tf.device(tf.DeviceSpec(device_type="GPU", device_index=i)):
+                with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+                    inputs_per_gpu = []
+                    for splited_input in splited_inputs_list:
+                        inputs_per_gpu.append(splited_input[i]) 
+                    outputs_per_gpu = self.Model(inputs_per_gpu)
+                    for idx, splited_output in enumerate(outputs_per_gpu):
+                        splited_outputs_list[idx].append(splited_output)
+        outputs = []
+        for splited_output_list in splited_outputs_list:
+            combiend_output = tf.concat(splited_output_list, axis=0)
+            outputs.append(combiend_output)
+        if len(outputs) == 1:
+            outputs = outputs[0]
+        return outputs
 
     def Model(self, inputs):
         input_depth, input_cmd, input_prev_a, input_action, gru_h_in = inputs
@@ -303,7 +328,7 @@ class Critic(object):
                                     w_init=tf.initializers.random_uniform(-0.003, 0.003),
                                     b_init=tf.initializers.random_uniform(-0.003, 0.003))
 
-        return q
+        return [q]
 
     def Train(self, input_depth, input_cmd, input_prev_a, input_action, y, length):
         input_depth = np.reshape(input_depth, [-1]+self.dim_img)
@@ -381,7 +406,7 @@ class RDPG_BPTT(object):
         self.buffer_size = flags.buffer_size
         self.gamma = flags.gamma
         self.supervision = flags.supervision
-        self.gpu_num = gpu_num
+        self.gpu_num = flags.gpu_num
 
         self.actor = Actor(sess=sess,
                            dim_action=self.dim_action,
