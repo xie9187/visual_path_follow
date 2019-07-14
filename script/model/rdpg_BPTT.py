@@ -47,13 +47,13 @@ class Actor(object):
 
             inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.gru_h_in, self.length]
             with tf.variable_scope('online'):
-                self.a_online, _, _ = self.MultiGPUModel(inputs)
-                with tf.device(tf.DeviceSpec(device_type="GPU", device_index=0)):
-                    _, self.a_test, self.gru_h_out = self.Model(inputs)
+                self.a_online, self.a_test, self.gru_h_out = self.Model(inputs)
+                # with tf.device(tf.DeviceSpec(device_type="GPU", device_index=0)):
+                #     _, self.a_test, self.gru_h_out = self.Model(inputs)
             self.network_params = tf.trainable_variables()
 
             with tf.variable_scope('target'):
-                self.a_target, _, _ = self.MultiGPUModel(inputs)
+                self.a_target, _, _ = self.Model(inputs)
             self.target_network_params = tf.trainable_variables()[len(self.network_params):]
 
         # Op for periodically updating target network with online network weights
@@ -250,11 +250,11 @@ class Critic(object):
             inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.input_action, self.gru_h_in, self.length]
 
             with tf.variable_scope('online'):
-                self.q_online  = self.MultiGPUModel(inputs)
+                self.q_online  = self.Model(inputs)
             self.network_params = tf.trainable_variables()[num_actor_vars:]
 
             with tf.variable_scope('target'):
-                self.q_target = self.MultiGPUModel(inputs)
+                self.q_target = self.Model(inputs)
             self.target_network_params = tf.trainable_variables()[(len(self.network_params) + num_actor_vars):]
 
         self.y = tf.placeholder(tf.float32, [self.batch_size, self.max_step, 1], name='y')
