@@ -148,7 +148,11 @@ def main(sess, robot_name='robot1'):
         cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
         pose = env.GetSelfStateGT()
         cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, [0., 0.])
-        local_next_goal = env.Global2Local([next_goal], pose)[0]
+        try:
+            local_next_goal = env.Global2Local([next_goal], pose)[0]
+        except Exception as e:
+            print 'next goal error'
+        
         env.last_target_point = copy.deepcopy(env.target_point)
         env.target_point = next_goal
         env.distance = np.sqrt(np.linalg.norm([pose[0]-local_next_goal[0], local_next_goal[1]-local_next_goal[1]]))
