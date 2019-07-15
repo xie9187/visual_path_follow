@@ -29,7 +29,7 @@ flag.DEFINE_float('c_learning_rate', 1e-3, 'Critic learning rate.')
 flag.DEFINE_integer('max_epi_step', 200, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
-flag.DEFINE_integer('n_cmd_type', 4, 'number of cmd class.')
+flag.DEFINE_integer('n_cmd_type', 4**2, 'number of cmd class.')
 flag.DEFINE_integer('dim_rgb_h', 192, 'input rgb image height.') # 96
 flag.DEFINE_integer('dim_rgb_w', 256, 'input rgb image width.') # 128
 flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
@@ -122,6 +122,7 @@ def main(sess, robot_name='robot1'):
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:
             print 'randomising the environment'
+            env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
             world.RandomTableAndMap()
             world.GetAugMap()
             obj_list = env.GetModelStates()
@@ -132,7 +133,7 @@ def main(sess, robot_name='robot1'):
             print 'randomisation finished'
 
         try:
-            map_route, real_route, init_pose = world.RandomPath()
+            table_route, map_route, real_route, init_pose = world.RandomPath()
             env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
             timeout_flag = False
         except:
@@ -140,13 +141,15 @@ def main(sess, robot_name='robot1'):
             print 'random path timeout'
             continue
 
-        time.sleep(1)
+        time.sleep(0.1)
         dynamic_route = copy.deepcopy(real_route)
-        time.sleep(1.)
+        time.sleep(0.1)
 
+        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
         pose = env.GetSelfStateGT()
-        cmd, next_goal = world.GetCmd(dynamic_route)
+        cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, [0., 0.])
         local_next_goal = env.Global2Local([next_goal], pose)[0]
+        env.last_target_point = copy.deepcopy(env.target_point)
         env.target_point = next_goal
         env.distance = np.sqrt(np.linalg.norm([pose[0]-local_next_goal[0], local_next_goal[1]-local_next_goal[1]]))
         
@@ -166,11 +169,13 @@ def main(sess, robot_name='robot1'):
         while not rospy.is_shutdown():
             start_time = time.time()
 
-            terminate, result, reward = env.GetRewardAndTerminate(t, max_step=flags.max_epi_step)
+            terminate, result, reward = env.GetRewardAndTerminate(t, 
+                                                                  max_step=flags.max_epi_step, 
+                                                                  len_route=len(dynamic_route))
             total_reward += reward
 
             if t > 0:
-                data_seq.append([depth_stack, [cmd], prev_a, action, reward, terminate])
+                data_seq.append([depth_stack, [combined_cmd], prev_a, action, reward, terminate])
 
             rgb_image = env.GetRGBImageObservation()
             depth_img = env.GetDepthImageObservation()
@@ -182,11 +187,21 @@ def main(sess, robot_name='robot1'):
                 env.LongPathPublish(dynamic_route)
             except:
                 pass
-            cmd, next_goal = world.GetCmd(dynamic_route, prev_goal=next_goal)
+            prev_cmd = cmd
+            prev_last_cmd = last_cmd
+            prev_goal = next_goal
+            cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, 
+                                                           cmd_seq, 
+                                                           goal_seq, 
+                                                           pose, 
+                                                           prev_cmd,
+                                                           prev_last_cmd, 
+                                                           prev_goal)
+            combined_cmd = last_cmd * 4 + cmd
+            env.last_target_point = copy.deepcopy(env.target_point)
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
             env.PathPublish(local_next_goal)
-            local_near_goal = env.GetLocalPoint(near_goal)
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
@@ -194,6 +209,7 @@ def main(sess, robot_name='robot1'):
             action += (exploration_noise.noise() * np.asarray(agent.action_range))
 
             if flags.supervision and (episode+1)%10 != 0:
+                local_near_goal = env.GetLocalPoint(near_goal)
                 action = env.Controller(local_near_goal, None, 1)
 
             env.SelfControl(action, [0.3, np.pi/6])
@@ -201,14 +217,8 @@ def main(sess, robot_name='robot1'):
             if (T + 1) % flags.steps_per_checkpoint == 0 and not flags.test:
                 saver.save(sess, os.path.join(model_dir, 'network') , global_step=episode)
 
-            if flags.supervision:
-                print_flag = True if (result >= 2 or len(dynamic_route) == 0) and (episode+1)%10 == 0 else False
-            else:
-                print_flag = True if terminate else False
-
             training_step_time = 0.
-            if (flags.supervision and (result >= 2 or len(dynamic_route) == 0)) or \
-               (not flags.supervision and terminate):
+            if result > 1:
                 if not (flags.supervision and (episode+1)%10 == 0):
                     agent.Add2Mem(data_seq)
 
@@ -222,15 +232,15 @@ def main(sess, robot_name='robot1'):
                                                               q_ph: np.amax(q)
                                                               })
                         summary_writer.add_summary(summary, T)
-                if print_flag:
-                    info_train = '| Episode:{:3d}'.format(episode) + \
-                                 '| t:{:3d}'.format(t) + \
-                                 '| T:{:5d}'.format(T) + \
-                                 '| Reward:{:.3f}'.format(total_reward) + \
-                                 '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
-                                 '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
-                                 '| OpStepT(s): {:.3f}'.format(training_step_time)
-                    print info_train
+
+                info_train = '| Episode:{:3d}'.format(episode) + \
+                             '| t:{:3d}'.format(t) + \
+                             '| T:{:5d}'.format(T) + \
+                             '| Reward:{:.3f}'.format(total_reward) + \
+                             '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
+                             '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
+                             '| OpStepT(s): {:.3f}'.format(training_step_time)
+                print info_train
                 episode += 1
                 T += 1
                 break

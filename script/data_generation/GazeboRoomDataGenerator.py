@@ -211,16 +211,32 @@ class GridWorld(object):
 
 
     def Real2Map(self, real_pos):
-        x, y, yaw = real_pos
+        x = real_pos[0]
+        y = real_pos[1]
         map_x = int(x / self.p2r)
         map_y = int(y / self.p2r)
-        return [map_y, map_x]
+        return [map_x, map_y]
+
+    def Map2Table(self, map_pos):
+        x = map_pos[0]
+        y = map_pos[1]
+        table_x = int(x / self.grid_size)
+        table_y = int(y / self.grid_size)
+        return [table_x, table_y]
+
+    def Table2Map(self, table_pos):
+        x = table_pos[0]
+        y = table_pos[1]
+        map_x = int(x * self.grid_size + self.grid_size/2)
+        map_y = int(y * self.grid_size + self.grid_size/2)
+        return [map_x, map_y]
 
     def Map2Real(self, map_pos):
-        map_x, map_y = map_pos
-        x = map_x * self.p2r 
-        y = map_y * self.p2r
-        return (x, y)
+        map_x = map_pos[0] 
+        map_y = map_pos[1]
+        x = float(map_x) * self.p2r 
+        y = float(map_y) * self.p2r
+        return [x, y]
                             
     def GetAugMap(self):
         augment_area = 4
@@ -240,24 +256,26 @@ class GridWorld(object):
         real_path = []
         dist = 0.
         t = 0
-        while len(map_path) < 50:
+        while len(map_path) < 25 or len(map_path) > 40 :
             init_table_pos = np.random.randint(0, self.table_size, size=[2])
             goal_table_pos = np.random.randint(0, self.table_size, size=[2])
-            if self.check_neighbour_zeros(self.table, init_table_pos) > 4 or self.check_neighbour_zeros(self.table, goal_table_pos) > 4:
-                continue
+            # if self.check_neighbour_zeros(self.table, init_table_pos) > 4:
+            #     continue
             if self.table[init_table_pos[1], init_table_pos[0]] != 0 or self.table[goal_table_pos[1], goal_table_pos[0]] != 0:
                 continue
             init_map_pos = init_table_pos * self.grid_size + self.grid_size/2
             goal_map_pos = goal_table_pos * self.grid_size + self.grid_size/2
             if self.aug_map[init_map_pos[1], init_map_pos[0]] * self.aug_map[goal_map_pos[1], goal_map_pos[0]] == 1:
                 continue
-            map_path, real_path = self.GetPathFromTable([init_table_pos[0], init_table_pos[1], goal_table_pos[0], goal_table_pos[1]])
+            table_path, map_path, real_path = self.GetPathFromTable([init_table_pos[0], 
+                                                                     init_table_pos[1], 
+                                                                     goal_table_pos[0], 
+                                                                     goal_table_pos[1]])
 
             t += 1
-            assert t < 50, 'timeout'
-
+            assert t < 100, 'timeout'
         init_yaw = np.arctan2(real_path[1][1] - real_path[0][1], real_path[1][0] - real_path[0][0])
-        return map_path, real_path, [real_path[0][0], real_path[0][1], init_yaw]
+        return table_path, map_path, real_path, [real_path[0][0], real_path[0][1], init_yaw]
 
     def RandomInitPose(self):
         space = 1.
@@ -287,29 +305,32 @@ class GridWorld(object):
         y = copy.deepcopy(yA)
 
         def interpolate_in_map(table_start, table_end, step=5):
-            map_start = np.asarray(table_start) * self.grid_size + self.grid_size/2
-            map_end = np.asarray(table_end) * self.grid_size + self.grid_size/2
+            map_start = np.asarray(self.Table2Map(table_start))
+            map_end = np.asarray(self.Table2Map(table_end))
             map_path = []
             for t in xrange(1, step+1):
                 map_path.append((map_start + (map_end - map_start)/step*t).tolist())
             return map_path
 
         curr_table_pos = [x, y]
+        table_route = []
         map_route = []
         real_route = []
         self.path_map = copy.deepcopy(self.map)
+        table_route = [curr_table_pos]
         for t in xrange(len(table_path)):
             x+=dx[int(table_path[t])]
             y+=dy[int(table_path[t])]
             last_table_pos = copy.deepcopy(curr_table_pos)
             curr_table_pos = [x, y]
+            table_route.append(curr_table_pos)
             map_sub_route = interpolate_in_map(last_table_pos, curr_table_pos)
             map_route += map_sub_route
             for map_pos in map_sub_route:
                 self.path_map[map_pos[1], map_pos[0]] = 2
                 real_route.append(self.Map2Real(map_pos))
 
-        return map_route, real_route
+        return table_route, map_route, real_route
 
     def GetPath(self, se):
         self.path_map = copy.deepcopy(self.map)
@@ -349,34 +370,72 @@ class GridWorld(object):
         else :
             return path[min_idx], path
 
-    def GetCmd(self, path, step_range=[3,5], prev_goal=None):
-        step = np.random.randint(step_range[0], step_range[1])
-        # get command
-        if len(path) > step:      
-            vect_start = [path[1][0] - path[0][0], path[1][1] - path[0][1]]
+    # def GetCmd(self, path, step_range=[3,5], prev_goal=None, prev_cmd=None):
+    #     step = np.random.randint(step_range[0], step_range[1])
+    #     # get command
+    #     if len(path) > step:      
+    #         vect_start = [path[1][0] - path[0][0], path[1][1] - path[0][1]]
+    #         dir_start = np.arctan2(vect_start[1], vect_start[0])
+    #         vect_end = [path[step][0] - path[step-1][0], path[step][1] - path[step-1][1]]
+    #         dir_end = np.arctan2(vect_end[1], vect_end[0])
+    #         direction = np.round(self.wrap2pi(dir_end - dir_start)/np.pi*2)
+    #         cmd = direction + 2
+    #     else:
+    #         cmd = 0
+    #     # get next goal
+    #     if len(path) >= 3:
+    #         for t in xrange(len(path)-2):
+    #             vect_curr = [path[t+1][0] - path[t][0], path[t+1][1] - path[t][1]]
+    #             dir_curr = np.arctan2(vect_curr[1], vect_curr[0])
+    #             vect_next = [path[t+2][0] - path[t+1][0], path[t+2][1] - path[t+1][1]]
+    #             dir_next = np.arctan2(vect_next[1], vect_next[0])
+    #             direction = np.round(self.wrap2pi(dir_next - dir_curr)/np.pi*2)
+    #             if np.fabs(direction) == 1:
+    #                 break
+    #         next_goal = path[t]
+    #     elif len(path) > 0:
+    #         next_goal = path[-1]
+    #     else:
+    #         next_goal = prev_goal
+    #     return np.uint8(cmd), next_goal
+
+    def GetCmdAndGoalSeq(self, path):
+        cmd_seq = []
+        goal_list = []
+        for t in range(len(path) - 2):
+            vect_start = [path[t+1][0] - path[t][0], path[t+1][1] - path[t][1]]
             dir_start = np.arctan2(vect_start[1], vect_start[0])
-            vect_end = [path[step][0] - path[step-1][0], path[step][1] - path[step-1][1]]
+            vect_end = [path[t+2][0] - path[t+1][0], path[t+2][1] - path[t+1][1]]
             dir_end = np.arctan2(vect_end[1], vect_end[0])
             direction = np.round(self.wrap2pi(dir_end - dir_start)/np.pi*2)
             cmd = direction + 2
-        else:
-            cmd = 0
-        # get next goal
-        if len(path) >= 3:
-            for t in xrange(len(path)-2):
-                vect_curr = [path[t+1][0] - path[t][0], path[t+1][1] - path[t][1]]
-                dir_curr = np.arctan2(vect_curr[1], vect_curr[0])
-                vect_next = [path[t+2][0] - path[t+1][0], path[t+2][1] - path[t+1][1]]
-                dir_next = np.arctan2(vect_next[1], vect_next[0])
-                direction = np.round(self.wrap2pi(dir_next - dir_curr)/np.pi*2)
-                if np.fabs(direction) == 1:
-                    break
-            next_goal = path[t]
-        elif len(path) > 0:
-            next_goal = path[-1]
+            cmd_seq.append(int(cmd))
+            if cmd == 1 or cmd == 3:
+                goal_list.append(self.Map2Real(self.Table2Map(path[t+1])))
+        cmd_seq = cmd_seq + [2, 0]
+        goal_list.append(self.Map2Real(self.Table2Map(path[-1])))
+
+        goal_idx = 0
+        goal_seq = [goal_list[goal_idx]]
+        for cmd in cmd_seq[:-1]:
+            if cmd == 1 or cmd == 3:
+                goal_idx += 1
+            goal_seq.append(goal_list[goal_idx])
+        return cmd_seq, goal_seq
+
+    def GetCmdAndGoal(self, table_path, cmd_seq, goal_seq, pose, prev_cmd=None, prev_last_cmd=None, prev_goal=None):
+        curr_table_pos = self.Map2Table(self.Real2Map(pose))
+        if curr_table_pos in table_path:
+            curr_idx = table_path.index(curr_table_pos)
+            cmd = cmd_seq[curr_idx]
+            last_cmd = cmd_seq[curr_idx-1] if curr_idx > 0 else cmd_seq[curr_idx]
+            next_goal = goal_seq[curr_idx]
         else:
             next_goal = prev_goal
-        return np.uint8(cmd), next_goal
+            last_cmd = prev_last_cmd
+            cmd = prev_cmd
+
+        return cmd, last_cmd, next_goal
 
 
     def wrap2pi(self, ang):
@@ -433,22 +492,25 @@ def DataGenerate(data_path, robot_name='robot1'):
         time.sleep(2.)
         if episode % 20 == 0:
             print 'randomising the environment'
+            env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
             world.RandomTableAndMap()
             world.GetAugMap()
             obj_list = env.GetModelStates()
             obj_pose_dict = world.AllocateObject(obj_list)
             for name in obj_pose_dict:
                 env.SetObjectPose(name, obj_pose_dict[name])
-            time.sleep(2.)
+            time.sleep(1.)
             print 'randomisation finished'
 
-        map_route, real_route, init_pose = world.RandomPath()
+        table_route, map_route, real_route, init_pose = world.RandomPath()
         env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
 
-        time.sleep(1)
+        time.sleep(0.1)
+        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
+
         dynamic_route = copy.deepcopy(real_route)
         env.LongPathPublish(real_route)
-        time.sleep(1.)
+        time.sleep(0.1)
 
         pose = env.GetSelfStateGT()
         goal = real_route[-1]
@@ -467,6 +529,10 @@ def DataGenerate(data_path, robot_name='robot1'):
         depth_image_save = []
         rgb_image_save = []
         file_num = len([f for f in os.listdir(data_path) if os.path.isfile(os.path.join(data_path, f))])
+        
+        cmd = 2
+        prev_goal = [0., 0.]
+        cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, prev_cmd, prev_goal)
         while not rospy.is_shutdown():
             start_time = time.time()
 
@@ -481,15 +547,12 @@ def DataGenerate(data_path, robot_name='robot1'):
             if result == 1 or result == 2:
                 Data = [action_save]
                 print "save sequence "+str(file_num/len(Data))
-                LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
+                # LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
                 rgb_image_save, action_save = [], []
                 break
             elif result == 4:
                 break
-
-            local_goal = env.GetLocalPoint(goal)
             
-
             rgb_image = env.GetRGBImageObservation()
 
             # get action
@@ -498,12 +561,16 @@ def DataGenerate(data_path, robot_name='robot1'):
                 near_goal, dynamic_route = world.GetNextNearGoal(dynamic_route, pose)
             except:
                 pass
-            cmd = world.GetCmd(dynamic_route)
+            prev_cmd = cmd
+            prev_goal = next_goal
+            cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, prev_cmd, prev_goal)
             env.CommandPublish(cmd)
 
             local_near_goal = env.GetLocalPoint(near_goal)
-            env.PathPublish(local_near_goal)
             action = env.Controller(local_near_goal, None, 1)
+
+            local_next_goal = env.GetLocalPoint(next_goal)
+            env.PathPublish(local_next_goal)
 
             env.SelfControl(action, [0.3, np.pi/6])
 

@@ -32,6 +32,7 @@ class GazeboWorld():
         self.last_time = time.time()
         self.curr_time = time.time()
         self.target_point = [0., 0.]
+        self.last_target_point = [0., 0.]
         self.model_states_data = None
         self.robot_name = robot_name
         self.depth_image_size = depth_size
@@ -359,7 +360,7 @@ class GazeboWorld():
         self.cmd_vel.publish(Twist())
         rospy.sleep(1)
 
-    def GetRewardAndTerminate(self, t, delta=None, max_step=100, OA_mode=False):
+    def GetRewardAndTerminate(self, t, delta=None, max_step=100, OA_mode=False, len_route=0):
         terminate = False
         reset = False
         laser_scan = self.GetLaserObservation()
@@ -367,10 +368,9 @@ class GazeboWorld():
         [x, y, theta] =  self.GetSelfStateGT()
         [v, w] = self.GetSelfSpeedGT()
 
-
         result = 0
 
-        if laser_min < 0.25 / 5.6 - 0.5:
+        if laser_min < 0.27 / 5.6 - 0.5:
             self.stop_counter += 1
         else:
             self.stop_counter = 0
@@ -378,45 +378,48 @@ class GazeboWorld():
         if t == 0:
             self.movement_counter = 0
         else:
-            if np.linalg.norm([x-self.last_pose[0], y-self.last_pose[1], theta-self.last_pose[2]]) < 0.01 and t > 20:
+            if np.linalg.norm([x-self.last_pose[0], y-self.last_pose[1], theta-self.last_pose[2]]) < 0.01 and t > 10:
                 self.movement_counter += 1
             else:
                 self.movement_counter = 0.
         self.last_pose = np.array([x, y, theta])
 
         if not OA_mode:
-            self.pre_distance = copy.deepcopy(self.distance)
-            self.distance = np.sqrt((self.target_point[0] - x)**2 + (self.target_point[1] - y)**2)
+            if self.last_target_point[0] != self.target_point[0] or self.last_target_point[1] != self.target_point[1]:
+                self.distance = np.sqrt((self.target_point[0] - x)**2 + (self.target_point[1] - y)**2)
+                self.pre_distance = copy.deepcopy(self.distance)
+            else:
+                self.pre_distance = copy.deepcopy(self.distance)
+                self.distance = np.sqrt((self.target_point[0] - x)**2 + (self.target_point[1] - y)**2)
             if delta is None:
                 if t == 0:
                     delta = 0.
                 else:
                     delta = self.pre_distance - self.distance
-            reward = delta * np.cos(w) - 0.01
+            reward = delta * np.cos(w*2)
         else:
             reward = v * np.cos(w) / 5.
 
         if self.stop_counter == 2:
             terminate = True
-            # print 'crash'
+            print 'crash'
             result = 3
             reward = -1.
         if self.movement_counter >= 10:
             terminate = True
-            # print 'stuck'
+            print 'stuck'
             result = 4
             reward = -1.
             self.movement_counter = 0
-        if not OA_mode:
-            if self.distance < self.target_size:
-                terminate = True
-                result = 1
-                # print 'reach the goal'
-                # reward = 1.
         if t >= max_step:
             result = 2
+            terminate = False
+            print 'time out'
+
+        if len_route == 0:
+            result = 1
             terminate = True
-            # print 'time out'
+            print 'reach the goal'
 
         return terminate, result, reward
 
