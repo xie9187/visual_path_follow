@@ -302,7 +302,8 @@ def model_test(sess):
 
 
 if __name__ == '__main__':
-    config = tf.ConfigProto(allow_soft_placement=True)
+    # config = tf.ConfigProto(allow_soft_placement=True)
+    config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:#
         main(sess)
