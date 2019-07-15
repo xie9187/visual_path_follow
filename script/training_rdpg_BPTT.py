@@ -134,20 +134,20 @@ def main(sess, robot_name='robot1'):
 
         try:
             table_route, map_route, real_route, init_pose = world.RandomPath()
-            env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
             timeout_flag = False
         except:
             timeout_flag = True
             print 'random path timeout'
             continue
-
+        env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
+        
         time.sleep(0.1)
         dynamic_route = copy.deepcopy(real_route)
         time.sleep(0.1)
 
         cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
         pose = env.GetSelfStateGT()
-        cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, [0., 0.])
+        cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, 2, [0., 0.])
         try:
             local_next_goal = env.Global2Local([next_goal], pose)[0]
         except Exception as e:
