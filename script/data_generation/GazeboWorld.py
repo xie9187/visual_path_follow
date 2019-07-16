@@ -400,26 +400,26 @@ class GazeboWorld():
         else:
             reward = v * np.cos(w) / 5.
 
-        if self.stop_counter == 2:
-            terminate = True
-            print 'crash'
-            result = 3
-            reward = -1.
-        if self.movement_counter >= 10:
-            terminate = True
-            print 'stuck'
-            result = 4
-            reward = -1.
-            self.movement_counter = 0
-        if t >= max_step:
+        if not OA_mode and len_route == 0:
             result = 2
-            terminate = False
-            print 'time out'
-
-        if len_route == 0:
-            result = 1
             terminate = True
             print 'reach the goal'
+        else:
+            if self.stop_counter == 2:
+                terminate = True
+                print 'crash'
+                result = 3
+                reward = -1.
+            if self.movement_counter >= 10:
+                terminate = True
+                print 'stuck'
+                result = 4
+                reward = -1.
+                self.movement_counter = 0
+            if t >= max_step:
+                result = 1
+                terminate = False
+                print 'time out'
 
         return terminate, result, reward
 
