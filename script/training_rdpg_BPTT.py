@@ -222,7 +222,7 @@ def main(sess, robot_name='robot1'):
                 saver.save(sess, os.path.join(model_dir, 'network') , global_step=episode)
 
             training_step_time = 0.
-            if result > 1:
+            if result >= 1:
                 if not (flags.supervision and (episode+1)%10 == 0):
                     agent.Add2Mem(data_seq)
 
