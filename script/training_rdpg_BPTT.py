@@ -161,7 +161,6 @@ def main(sess, robot_name='robot1'):
         depth_stack = np.stack([depth_img, depth_img, depth_img], axis=-1)
         action = [0., 0.]
         goal = [0., 0.]
-        cmd = 0
         gru_h_in = np.zeros([1, flags.n_hidden])
 
         total_reward = 0

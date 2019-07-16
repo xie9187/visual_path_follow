@@ -457,7 +457,7 @@ def FileProcess():
     print "file processed"
 
 def LogData(Data, image_save, num, path):
-    name = ['action']
+    name = ['action', 'pose', 'cmd']
     for x in xrange(len(name)):
         file = open(path+'/'+str(num)+'_'+name[x]+'.csv', 'w')
         writer = csv.writer(file, delimiter=',', quotechar='|')
@@ -502,15 +502,30 @@ def DataGenerate(data_path, robot_name='robot1'):
             time.sleep(1.)
             print 'randomisation finished'
 
-        table_route, map_route, real_route, init_pose = world.RandomPath()
+        try:
+            table_route, map_route, real_route, init_pose = world.RandomPath()
+            timeout_flag = False
+        except:
+            timeout_flag = True
+            print 'random path timeout'
+            continue
         env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
 
         time.sleep(0.1)
-        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
-
         dynamic_route = copy.deepcopy(real_route)
-        env.LongPathPublish(real_route)
         time.sleep(0.1)
+
+        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
+        pose = env.GetSelfStateGT()
+        cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, 2, [0., 0.])
+        try:
+            local_next_goal = env.Global2Local([next_goal], pose)[0]
+        except Exception as e:
+            print 'next goal error'
+
+        env.last_target_point = copy.deepcopy(env.target_point)
+        env.target_point = next_goal
+        env.distance = np.sqrt(np.linalg.norm([pose[0]-local_next_goal[0], local_next_goal[1]-local_next_goal[1]]))
 
         pose = env.GetSelfStateGT()
         goal = real_route[-1]
@@ -526,31 +541,33 @@ def DataGenerate(data_path, robot_name='robot1'):
         result = 0
         action_save = []
         cmd_save = []
+        pose_save = []
         depth_image_save = []
         rgb_image_save = []
         file_num = len([f for f in os.listdir(data_path) if os.path.isfile(os.path.join(data_path, f))])
         
-        cmd = 2
-        prev_goal = [0., 0.]
-        cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, prev_cmd, prev_goal)
         while not rospy.is_shutdown():
             start_time = time.time()
 
-            terminal, result, reward = env.GetRewardAndTerminate(t, max_step=500)
+            terminate, result, reward = env.GetRewardAndTerminate(t, 
+                                                                  max_step=200, 
+                                                                  len_route=len(dynamic_route))
             total_reward += reward
 
             # log data
             if t > 0:
                 rgb_image_save.append(rgb_image)
                 action_save.append(action.tolist())
+                pose_save.append(pose)
+                cmd_save.append([cmd])
 
             if result == 1 or result == 2:
-                Data = [action_save]
+                Data = [action_save, pose_save, cmd_save]
                 print "save sequence "+str(file_num/len(Data))
-                # LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
+                LogData(Data, rgb_image_save, str(file_num/len(Data)), data_path)
                 rgb_image_save, action_save = [], []
                 break
-            elif result == 4:
+            elif result > 2:
                 break
             
             rgb_image = env.GetRGBImageObservation()
@@ -559,11 +576,19 @@ def DataGenerate(data_path, robot_name='robot1'):
             pose = env.GetSelfStateGT()
             try:
                 near_goal, dynamic_route = world.GetNextNearGoal(dynamic_route, pose)
+                env.LongPathPublish(dynamic_route)
             except:
                 pass
             prev_cmd = cmd
+            prev_last_cmd = last_cmd
             prev_goal = next_goal
-            cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, prev_cmd, prev_goal)
+            cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, 
+                                                           cmd_seq, 
+                                                           goal_seq, 
+                                                           pose, 
+                                                           prev_cmd,
+                                                           prev_last_cmd, 
+                                                           prev_goal)
             env.CommandPublish(cmd)
 
             local_near_goal = env.GetLocalPoint(near_goal)
