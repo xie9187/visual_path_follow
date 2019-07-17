@@ -55,6 +55,7 @@ flag.DEFINE_integer('buffer_size', 500, 'The size of Buffer')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('supervision', False, 'supervised learning')
+flag.DEFINE_boolean('load_network', False, 'load model learning')
 
 # noise param
 flag.DEFINE_float('mu', 0., 'mu')
@@ -103,7 +104,7 @@ def main(sess, robot_name='robot1'):
     saver = tf.train.Saver(trainable_var, max_to_keep=3)
     sess.run(tf.global_variables_initializer())
 
-    if flags.test:
+    if flags.test or flags.load_network:
         checkpoint = tf.train.get_checkpoint_state(model_dir)
         if checkpoint and checkpoint.model_checkpoint_path:
             saver.restore(sess, checkpoint.model_checkpoint_path)
