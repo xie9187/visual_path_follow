@@ -47,11 +47,11 @@ flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
 
 # training param
-flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
+flag.DEFINE_integer('max_training_step', 5000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "rdpg_bptt", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 10000, 'How many training steps to do per checkpoint.')
-flag.DEFINE_integer('buffer_size', 500, 'The size of Buffer')
+flag.DEFINE_integer('buffer_size', 3000, 'The size of Buffer')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('supervision', False, 'supervised learning')
