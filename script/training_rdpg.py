@@ -144,7 +144,7 @@ def main(sess, robot_name='robot1'):
             continue
         env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
 
-        time.sleep(0.1)
+        time.sleep(1.0)
         dynamic_route = copy.deepcopy(real_route)
         time.sleep(0.1)
 
