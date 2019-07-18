@@ -29,7 +29,7 @@ flag.DEFINE_float('c_learning_rate', 1e-3, 'Critic learning rate.')
 flag.DEFINE_integer('max_epi_step', 200, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
-flag.DEFINE_integer('n_cmd_type', 4**2, 'number of cmd class.')
+flag.DEFINE_integer('n_cmd_type', 4, 'number of cmd class.')
 flag.DEFINE_integer('dim_rgb_h', 192, 'input rgb image height.') # 96
 flag.DEFINE_integer('dim_rgb_w', 256, 'input rgb image width.') # 128
 flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
@@ -50,7 +50,7 @@ flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
 flag.DEFINE_integer('max_training_step', 5000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "rdpg_bptt", 'Name of the model.')
-flag.DEFINE_integer('steps_per_checkpoint', 10000, 'How many training steps to do per checkpoint.')
+flag.DEFINE_integer('steps_per_checkpoint', 100000, 'How many training steps to do per checkpoint.')
 flag.DEFINE_integer('buffer_size', 3000, 'The size of Buffer')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
@@ -201,7 +201,7 @@ def main(sess, robot_name='robot1'):
                                                            prev_cmd,
                                                            prev_last_cmd, 
                                                            prev_goal)
-            combined_cmd = last_cmd * 4 + cmd
+            combined_cmd = last_cmd * flags.n_cmd_type + cmd
             env.last_target_point = copy.deepcopy(env.target_point)
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
@@ -209,7 +209,7 @@ def main(sess, robot_name='robot1'):
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
-            action, gru_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], gru_h_in)
+            action, gru_h_out = agent.ActorPredict([depth_stack], [[combined_cmd]], [prev_a], gru_h_in)
             action += (exploration_noise.noise() * np.asarray(agent.action_range))
 
             if flags.supervision and (episode+1)%10 != 0:

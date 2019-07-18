@@ -403,6 +403,7 @@ class GazeboWorld():
         if not OA_mode and len_route == 0:
             result = 2
             terminate = True
+            reward = 1.
             print 'reach the goal'
         else:
             if self.stop_counter == 2:

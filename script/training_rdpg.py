@@ -55,6 +55,7 @@ flag.DEFINE_integer('buffer_size', 10000, 'The size of Buffer')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('supervision', False, 'supervised learning')
+flag.DEFINE_boolean('load_network', False, 'load model learning')
 
 # noise param
 flag.DEFINE_float('mu', 0., 'mu')
@@ -107,7 +108,7 @@ def main(sess, robot_name='robot1'):
     saver = tf.train.Saver(trainable_var, max_to_keep=3)
     sess.run(tf.global_variables_initializer())
 
-    if flags.test:
+    if flags.test or flags.load_network:
         checkpoint = tf.train.get_checkpoint_state(model_dir)
         if checkpoint and checkpoint.model_checkpoint_path:
             saver.restore(sess, checkpoint.model_checkpoint_path)
@@ -135,22 +136,27 @@ def main(sess, robot_name='robot1'):
             print 'randomisation finished'
 
         try:
-            map_route, real_route, init_pose = world.RandomPath()
-            env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
+            table_route, map_route, real_route, init_pose = world.RandomPath()
             timeout_flag = False
         except:
             timeout_flag = True
             print 'random path timeout'
             continue
+        env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
 
-
-        time.sleep(1)
+        time.sleep(0.1)
         dynamic_route = copy.deepcopy(real_route)
-        time.sleep(1.)
+        time.sleep(0.1)
 
+        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
         pose = env.GetSelfStateGT()
-        cmd, next_goal = world.GetCmd(dynamic_route)
-        local_next_goal = env.Global2Local([next_goal], pose)[0]
+        cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, 2, [0., 0.])
+        try:
+            local_next_goal = env.Global2Local([next_goal], pose)[0]
+        except Exception as e:
+            print 'next goal error'
+
+        env.last_target_point = copy.deepcopy(env.target_point)
         env.target_point = next_goal
         env.distance = np.sqrt(np.linalg.norm([pose[0]-local_next_goal[0], local_next_goal[1]-local_next_goal[1]]))
 
@@ -172,12 +178,14 @@ def main(sess, robot_name='robot1'):
         while not rospy.is_shutdown():
             start_time = time.time()
 
-            terminate, result, reward = env.GetRewardAndTerminate(t, max_step=flags.max_epi_step)
+            terminate, result, reward = env.GetRewardAndTerminate(t, 
+                                                                  max_step=flags.max_epi_step, 
+                                                                  len_route=len(dynamic_route))
             total_reward += reward
 
             if t > 0 and not (flags.supervision and (episode+1)%10 == 0):
                 agent.Add2Mem([depth_stack, 
-                               [cmd], 
+                               [combined_cmd], 
                                prev_a, 
                                local_next_goal, 
                                [rnn_h_in[0][0], rnn_h_in[1][0]] if flags.rnn_type == 'lstm' else rnn_h_in[0], 
@@ -195,18 +203,29 @@ def main(sess, robot_name='robot1'):
                 env.LongPathPublish(dynamic_route)
             except:
                 pass
-            cmd, next_goal = world.GetCmd(dynamic_route, prev_goal=next_goal)
+            prev_cmd = cmd
+            prev_last_cmd = last_cmd
+            prev_goal = next_goal
+            cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, 
+                                                           cmd_seq, 
+                                                           goal_seq, 
+                                                           pose, 
+                                                           prev_cmd,
+                                                           prev_last_cmd, 
+                                                           prev_goal)
+            combined_cmd = last_cmd * flags.n_cmd_type + cmd
+            env.last_target_point = copy.deepcopy(env.target_point)
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
             env.PathPublish(local_next_goal)
-            local_near_goal = env.GetLocalPoint(near_goal)
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
-            action, rnn_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], rnn_h_in)
+            action, rnn_h_out = agent.ActorPredict([depth_stack], [[combined_cmd]], [prev_a], rnn_h_in)
             action += (exploration_noise.noise() * np.asarray(agent.action_range))
 
             if flags.supervision and (episode+1)%10 != 0:
+                local_near_goal = env.GetLocalPoint(near_goal)
                 action = env.Controller(local_near_goal, None, 1)
 
             env.SelfControl(action, [0.3, np.pi/6])
@@ -220,11 +239,7 @@ def main(sess, robot_name='robot1'):
                 epi_err_h.append(err_h)
                 epi_err_c.append(err_c)
             
-            if flags.supervision:
-                print_flag = True if (result >= 2 or len(dynamic_route) == 0) and (episode+1)%10 == 0 else False
-            else:
-                print_flag = True if terminate else False
-            if print_flag:
+            if result >= 1::
                 if T > agent.batch_size and not flags.test:
                     summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                           q_ph: np.amax(q),
@@ -238,9 +253,7 @@ def main(sess, robot_name='robot1'):
                              '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
                              '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
                 print info_train
-
-            if (flags.supervision and (result >= 2 or len(dynamic_route) == 0)) or \
-               (not flags.supervision and terminate):
+                
                 episode += 1
                 T += 1
                 break
