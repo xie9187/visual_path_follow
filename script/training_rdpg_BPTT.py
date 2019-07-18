@@ -226,7 +226,7 @@ def main(sess, robot_name='robot1'):
                 if not (flags.supervision and (episode+1)%10 == 0):
                     agent.Add2Mem(data_seq)
 
-                if episode >= agent.batch_size and not flags.test:
+                if len(agent.memory) > agent.batch_size and not flags.test:
                     training_step_start_time = time.time()
                     for train_t in range(1):
                         q = agent.Train()

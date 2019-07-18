@@ -233,14 +233,14 @@ def main(sess, robot_name='robot1'):
             if (T + 1) % flags.steps_per_checkpoint == 0 and not flags.test:
                 saver.save(sess, os.path.join(model_dir, 'network') , global_step=episode)
 
-            if T > agent.batch_size and not flags.test:
+            if len(agent.memory) > agent.batch_size and not flags.test:
                 q, err_h, err_c = agent.Train()
                 epi_q.append(np.amax(q))
                 epi_err_h.append(err_h)
                 epi_err_c.append(err_c)
             
             if result >= 1:
-                if T > agent.batch_size and not flags.test:
+                if len(agent.memory) > agent.batch_size and not flags.test:
                     summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                           q_ph: np.amax(q),
                                                           err_h_ph: np.mean(epi_err_h),

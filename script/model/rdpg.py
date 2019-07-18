@@ -367,7 +367,7 @@ class RDPG(object):
             self.memory.pop(0)
 
     def SampleBatch(self):
-        if len(self.memory) >= self.batch_size:
+        if len(self.memory) > self.batch_size:
             indices = random.sample(range(0, len(self.memory)-1), self.batch_size)
 
             batch = []
