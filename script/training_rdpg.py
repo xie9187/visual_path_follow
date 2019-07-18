@@ -239,7 +239,7 @@ def main(sess, robot_name='robot1'):
                 epi_err_h.append(err_h)
                 epi_err_c.append(err_c)
             
-            if result >= 1::
+            if result >= 1:
                 if T > agent.batch_size and not flags.test:
                     summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                           q_ph: np.amax(q),
@@ -253,7 +253,7 @@ def main(sess, robot_name='robot1'):
                              '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
                              '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
                 print info_train
-                
+
                 episode += 1
                 T += 1
                 break
