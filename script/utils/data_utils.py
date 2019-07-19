@@ -302,7 +302,7 @@ def data_visualise(file_path_number_list, batch_size, demo_len, max_step):
 if __name__ == '__main__':
     data_path = sys.argv[1]
     sub_data_folder = sys.argv[2]
-    sub_data_path = os.path.join(data_path, data_sub_folder)
+    sub_data_path = os.path.join(data_path, sub_data_folder)
     print 'data_path: ', arg
 
     batch_size = 16
