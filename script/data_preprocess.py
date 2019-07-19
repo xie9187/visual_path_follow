@@ -48,7 +48,7 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
                                                               input_b_tf: input_b_batch
                                                               })[:end-start])
             pred_flow_seq = np.concatenate(pred_flow_seq_list, axis=0)
-            print len(pred_flow_seq_list), len(img_list) 
+            print len(pred_flow_seq), len(img_list) 
             assert False
             pred_flow_list = np.split(pred_flow_seq, len(pred_flow_seq), axis=0)
 
