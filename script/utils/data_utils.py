@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as mtrans
 import tensorflow as tf
 
-from model.flownet.flownet_s import get_flownet 
+
 
 CWD = os.getcwd()
 
@@ -278,57 +278,6 @@ def write_csv(data, file_path):
             row = [row]
         writer.writerow(row)
 
-def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
-    # get flownet
-    checkpoint = os.path.join(data_path, 'saved_network/flownet/flownet-S.ckpt-0')
-    pred_flow, input_a, input_b = get_flownet(dim_img, max_step-1) # l-1,h,w,2
-    saver = tf.train.Saver()
-
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    with tf.Session(config=config):
-        saver.restore(sess, checkpoint)
-
-        # prepare image sequence
-        for file_path_number in file_path_number_list:
-            img_seq_path = file_path_number + '_image'
-            img_file_list = os.listdir(img_seq_path)
-            img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
-            img_list = []
-            for img_file_name in img_file_list:
-                img_file_path = os.path.join(img_seq_path, img_file_name)
-                img = read_img_file(img_file_path, img_size)
-                img_list.append(img)
-            input_a = np.stack([img_list[0]] + img_list[:-1], axis=0)
-            input_b = np.stack(img_list, axis=0)
-            if input_a.max() > 1.0:
-                input_a = input_a / 255.0
-            if input_b.max() > 1.0:
-                input_b = input_b / 255.0
-            pred_flow_seq_list = []
-            for batch_id in xrange(len(img_list)/batch_size+int(len(img_list)%batch_size>0)):
-                start = batch_id * batch_size
-                end = min((batch_id + 1) * batch_size, len(img_list))
-                pred_flow_seq_list.append(sess.run(pred_flow, 
-                                                   feed_dict={input_a: input_a[start:end],
-                                                              input_b: input_b[start:end]
-                                                              }))
-            pred_flow_seq = np.concatenate(pred_flow_seq_list, axis=0)
-            pred_flow_list = np.split(pred_flow_seq, len(pred_flow_seq), axis=0)
-
-            file = open(file_path_number+'_flow.csv', 'w')
-            writer = csv.writer(file, delimiter=',', quotechar='|')
-            for t, pred_flow in enumerate(pred_flow_list):
-                unique_name = str(t)
-                pred_flow = np.squeeze(pred_flow)
-                shape = np.shape(pred_flow)
-                mean_flow = np.mean(pred_flow[shape[0]/4:shape[0]/4*3, 
-                                              shape[1]/4:shape[1]/4*3,
-                                              :],
-                                 axis=(0, 1))
-                writer.writerow(mean_flow)
-            file.close()
-
 def data_visualise(file_path_number_list, batch_size, demo_len, max_step):
     pos = 0
     batch_data, pos, end_flag = read_a_batch_to_mem(file_path_number_list, 
@@ -386,9 +335,7 @@ if __name__ == '__main__':
     data_path_list = [sub_data_path]
     file_path_number_list = get_file_path_number_list(data_path_list)
 
-    # data_visualise(file_path_number_list, batch_size, demo_len, max_step)
-
-    generate_flow_seq(file_path_number_list, data_path, batch_size, img_size)
+    data_visualise(file_path_number_list, batch_size, demo_len, max_step)
 
 
             
