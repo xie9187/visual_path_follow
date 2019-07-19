@@ -28,6 +28,8 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
             for img_file_name in img_file_list:
                 img_file_path = os.path.join(img_seq_path, img_file_name)
                 img = data_util.read_img_file(img_file_path, img_size)
+                # Convert from RGB -> BGR
+                img = img[..., [2, 1, 0]]
                 img_list.append(img)
             input_a = np.stack([img_list[0]] + img_list[:-1], axis=0)
             input_b = np.stack(img_list, axis=0)
