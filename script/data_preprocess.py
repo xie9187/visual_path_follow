@@ -39,8 +39,8 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
                 start = batch_id * batch_size
                 end = min((batch_id + 1) * batch_size, len(img_list))
                 pred_flow_seq_list.append(sess.run(pred_flow, 
-                                                   feed_dict={input_a: input_a[start:end],
-                                                              input_b: input_b[start:end]
+                                                   feed_dict={input_a: input_a[start:end, :, :, :],
+                                                              input_b: input_b[start:end, :, :, :]
                                                               }))
             pred_flow_seq = np.concatenate(pred_flow_seq_list, axis=0)
             pred_flow_list = np.split(pred_flow_seq, len(pred_flow_seq), axis=0)
