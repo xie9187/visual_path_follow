@@ -36,7 +36,7 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
             if input_b.max() > 1.0:
                 input_b = input_b / 255.0
             pred_flow_seq_list = []
-            for batch_id in xrange(len(img_list)):
+            for batch_id in xrange(len(img_list)/batch_size+int(len(img_list)%batch_size>0)):
                 start = batch_id * batch_size
                 end = min((batch_id + 1) * batch_size, len(img_list))
                 input_a_batch = np.zeros([batch_size]+img_dim)
