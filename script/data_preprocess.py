@@ -42,8 +42,8 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
                 input_a_batch = np.zeros([batch_size]+img_dim)
                 input_b_batch = np.zeros([batch_size]+img_dim)
                 print start, end, len(img_list)
-                input_a_batch[start:end] = input_a[start:end]
-                input_b_batch[start:end] = input_b[start:end]
+                input_a_batch[:end-start] = input_a[start:end]
+                input_b_batch[:end-start] = input_b[start:end]
                 pred_flow_seq_list.append(sess.run(pred_flow_tf, 
                                                    feed_dict={input_a_tf: input_a_batch,
                                                               input_b_tf: input_b_batch
