@@ -51,6 +51,7 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
             pred_flow_list = np.split(pred_flow_seq, len(pred_flow_seq), axis=0)
 
             file = open(file_path_number+'_flow.csv', 'w')
+            print 'save ' + file_path_number + '_flow.csv'
             writer = csv.writer(file, delimiter=',', quotechar='|')
             for t, pred_flow in enumerate(pred_flow_list):
                 unique_name = str(t)
