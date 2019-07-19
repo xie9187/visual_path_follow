@@ -10,7 +10,8 @@ import utils.data_utils as data_util
 def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
     # get flownet
     checkpoint = os.path.join(data_path, 'saved_network/flownet/flownet-S.ckpt-0')
-    pred_flow_tf, input_a_tf, input_b_tf = get_flownet([img_size[0], img_size[1], 3], max_step-1) # l,h,w,2
+    img_dim = [img_size[0], img_size[1], 3]
+    pred_flow_tf, input_a_tf, input_b_tf = get_flownet(img_dim, batch_size) # l,h,w,2
     saver = tf.train.Saver()
 
     config = tf.ConfigProto()
@@ -35,13 +36,19 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
             if input_b.max() > 1.0:
                 input_b = input_b / 255.0
             pred_flow_seq_list = []
-            for batch_id in xrange(len(img_list)/batch_size+int(len(img_list)%batch_size>0)):
+            for batch_id in xrange(int(np.floor(len(img_list)/float(batch_size)))):
                 start = batch_id * batch_size
                 end = min((batch_id + 1) * batch_size, len(img_list))
+                input_a_batch = np.zeros([batch_size]+img_dim)
+                input_b_batch = np.zeros([batch_size]+img_dim)
+                input_a_batch[start:end] = input_a[start:end]
+                input_b_batch[start:end] = input_b[start:end]
                 pred_flow_seq_list.append(sess.run(pred_flow_tf, 
-                                                   feed_dict={input_a_tf: input_a[start:end],
-                                                              input_b_tf: input_b[start:end]
-                                                              }))
+                                                   feed_dict={input_a_tf: input_a_batch,
+                                                              input_b_tf: input_b_batch
+                                                              })[start:end])
+                print start, end, len(img_list)
+                assert False
             pred_flow_seq = np.concatenate(pred_flow_seq_list, axis=0)
             pred_flow_list = np.split(pred_flow_seq, len(pred_flow_seq), axis=0)
 
