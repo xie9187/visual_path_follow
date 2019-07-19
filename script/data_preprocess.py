@@ -47,9 +47,9 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
                                                    feed_dict={input_a_tf: input_a_batch,
                                                               input_b_tf: input_b_batch
                                                               })[:end-start])
-                print start, end, len(pred_flow_seq_list), len(img_list) 
-            assert False
             pred_flow_seq = np.concatenate(pred_flow_seq_list, axis=0)
+            len(pred_flow_seq_list), len(img_list) 
+            assert False
             pred_flow_list = np.split(pred_flow_seq, len(pred_flow_seq), axis=0)
 
             file = open(file_path_number+'_flow.csv', 'w')
