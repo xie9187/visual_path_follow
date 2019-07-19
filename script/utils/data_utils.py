@@ -222,6 +222,7 @@ def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, img_
         # flow sequence
         flow_file_name = file_path_number + '_flow.csv'
         flow_seq = np.reshape(read_csv_file(flow_file_name), [-1, 2])[:, 0]/origin_img_dim[1]*20
+        print flow_seq.shape()
         if len(flow_seq) > max_step:
             flow_seq = flow_seq[:max_step, :]
 
