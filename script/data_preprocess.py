@@ -46,7 +46,7 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
                 pred_flow_seq_list.append(sess.run(pred_flow_tf, 
                                                    feed_dict={input_a_tf: input_a_batch,
                                                               input_b_tf: input_b_batch
-                                                              })[start:end])
+                                                              })[:end-start])
             print len(img_list), len(pred_flow_seq_list)   
             assert False
             pred_flow_seq = np.concatenate(pred_flow_seq_list, axis=0)
