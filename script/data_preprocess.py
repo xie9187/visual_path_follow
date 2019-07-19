@@ -70,6 +70,6 @@ if __name__ == '__main__':
     img_size = (512, 384)
 
     data_path_list = [sub_data_path]
-    file_path_number_list = get_file_path_number_list(data_path_list)
+    file_path_number_list = data_util.get_file_path_number_list(data_path_list)
 
     generate_flow_seq(file_path_number_list, data_path, batch_size, img_size)
