@@ -303,7 +303,7 @@ if __name__ == '__main__':
     data_path = sys.argv[1]
     sub_data_folder = sys.argv[2]
     sub_data_path = os.path.join(data_path, sub_data_folder)
-    print 'data_path: ', arg
+    print 'data_path: ', data_path
 
     batch_size = 16
     demo_len = 20
