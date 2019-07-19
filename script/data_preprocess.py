@@ -61,7 +61,7 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
 if __name__ == '__main__':
     data_path = sys.argv[1]
     sub_data_folder = sys.argv[2]
-    sub_data_path = os.path.join(data_path, data_sub_folder)
+    sub_data_path = os.path.join(data_path, sub_data_folder)
     print 'data_path: ', arg
 
     batch_size = 16
