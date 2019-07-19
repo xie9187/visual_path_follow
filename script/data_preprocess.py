@@ -15,7 +15,7 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    with tf.Session(config=config):
+    with tf.Session(config=config) as sess:
         saver.restore(sess, checkpoint)
 
         # prepare image sequence
