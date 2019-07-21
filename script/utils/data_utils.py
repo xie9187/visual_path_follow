@@ -261,7 +261,7 @@ def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, img_
     batch_data = get_a_batch(data, 0, batch_size, max_step, img_size)
     process_time = time.time() - start_time - read_time
 
-    print 'read time: {:.2f}s, process time: {:.2f}s '.format(read_time, process_time)  
+    # print 'read time: {:.2f}s, process time: {:.2f}s '.format(read_time, process_time)  
 
     return batch_data, end, False
 
