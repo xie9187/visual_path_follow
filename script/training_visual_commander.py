@@ -104,7 +104,7 @@ def training(sess, model):
                                                progressbar.Percentage()])
         for t in xrange(len(train_data)/batch_size):
             sample_start_time = time.time()
-            batch_data = data_utils.get_a_batch(train_data, t*batch_size, max_step, img_size, max_n_demo)
+            batch_data = data_utils.get_a_batch(train_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
             sample_time = time.time() - sample_start_time
 
             opt_start_time = time.time()
@@ -123,8 +123,8 @@ def training(sess, model):
         loss_list = []
         end_flag = False
         pos = 0
-        for t in xrange(len(vali_data)/batch_size):
-            batch_data = data_utils.get_a_batch(vali_data, t*batch_size, max_step, img_size, max_n_demo)
+        for t in xrange(len(valid_data)/batch_size):
+            batch_data = data_utils.get_a_batch(valid_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
             _, loss = model.valid(batch_data)
             loss_list.append(loss)
         loss_valid = np.mean(loss_list)
