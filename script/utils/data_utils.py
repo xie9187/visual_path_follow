@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import numpy as np
 import csv
 import random
@@ -11,8 +13,115 @@ import matplotlib.transforms as mtrans
 import tensorflow as tf
 
 
-
+origin_img_dim = (384, 512)
 CWD = os.getcwd()
+
+def read_file(file_path, max_step, img_size):
+    if 'image' in file_path:
+        # img sequence
+        img_file_list = os.listdir(file_path)
+        img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
+        if len(img_file_list) > max_step:
+            img_file_list = img_file_list[:max_step]
+        img_list = []
+        for img_file_name in img_file_list:
+            img_file_path = os.path.join(file_path, img_file_name)
+            img, _ = read_img_file(img_file_path, img_size)
+            img_list.append(img)
+        data_seq = np.stack(img_list, axis=0)
+    elif 'flow' in file_path:
+        # flow sequence
+        data_seq = np.reshape(read_csv_file(file_path), [-1, 2])[:, 0]/origin_img_dim[1]*50
+    return data_seq
+
+def write_unit_meta_file(source_path_number_list, meta_file_folder, max_step, img_size):
+    names = ['image', 'flow']
+    file_format = ['', '.csv']
+    dims = [img_size[0]*img_size[1]*3, 1]
+    scales = [1, 1e5]
+    dtypes = [np.int8, np.int32]
+    Data = [[], [], []]
+
+    for file_id, file_path_number in enumerate(source_path_number_list):
+        print('load {:}/{:} \r'.format(file_id, len(source_path_number_list)), end="\r")
+        sys.stdout.flush() 
+        
+        for name_id, name in enumerate(names): 
+            file_name = file_path_number+'_'+name+file_format[name_id]
+            data = (np.reshape(read_file(file_name, 
+                                         max_step,
+                                         img_size), 
+                               [-1]) * scales[name_id]).astype(dtypes[name_id])
+
+            max_len = min(len(data), max_step * dims[name_id])
+            data_vector = np.zeros((max_step * dims[name_id]), dtype=dtypes[name_id])
+            data_vector[:len(data)] = data
+            Data[name_id].append(data_vector)
+            if 'flow' in name:
+                Data[-1].append(len(data))
+
+    for name_id, name in enumerate(names): 
+        meta_file_name = os.path.join(meta_file_folder, name+'.csv')
+        print('start to save '+meta_file_name)
+        data_save = np.stack(Data[name_id], axis=0)
+        data_save.tofile(meta_file_name)
+
+    meta_file_name = os.path.join(meta_file_folder, 'seq_len.csv')
+    print('start to save '+meta_file_name)
+    data_save = np.stack(Data[-1], axis=0)
+    data_save.tofile(meta_file_name)
+
+
+def write_multiple_meta_files(source_list, meta_file_path, max_file_num, max_step, img_size):
+    file_path_number_list = []
+    for path in source_list:
+        nums = []
+        file_list = os.listdir(path)
+        print('Loading from '+path)
+        for file_name in file_list:
+            if 'flow' in file_name:
+                nums.append(int(file_name[:file_name.find('_')]))
+        nums = np.sort(nums).tolist()
+        for num in nums:
+            file_path_number_list.append(path+'/'+str(num))
+    print('Found {} sequences!!'.format(len(file_path_number_list)))
+
+    start_time = time.time()
+    for x in xrange(len(file_path_number_list)/max_file_num): # only create full meta batch
+        source_path_number_list = file_path_number_list[max_file_num*x:
+                                                        min(max_file_num*(x+1), len(file_path_number_list))]                                                                                  
+        meta_file_folder = os.path.join(meta_file_path, str(x))
+        if not os.path.exists(meta_file_folder): 
+            os.makedirs(meta_file_folder) 
+        print('Creating ' + meta_file_folder)
+        write_unit_meta_file(source_path_number_list, meta_file_folder, max_step, img_size)
+
+        used_time = time.time() - start_time
+        print('Created {}/{} meta files | time used (min): {:.1f}'.format(x+1, len(file_path_number_list)/max_file_num, used_time/60.))
+
+
+def read_meta_file(meta_file_folder, max_steps, batch_size):
+    names = ['laser', 'action', 'cmd', 'cmd_next', 'obj_pose', 'status', 'length']
+    dims = [LASER_DIM, 2, 1, 1, 2, 1, 1]
+    dtypes = [np.int32, np.int32, np.int8, np.int8, np.int32, np.int8, np.int64]
+    scales = [SCALE, SCALE, 1, 1, SCALE, 1, 1]
+    start_time = time.time()
+    Data = []
+    for name_id, name in enumerate(names): 
+        file_name = os.path.join(meta_file_folder, name+'.csv')
+        file = open(file_name, 'r')
+        data = np.fromfile(file, dtype=dtypes[name_id])
+        file.close()
+        if name is not 'length':
+            real_data = np.reshape(np.asarray(data, dtype=np.float32), [-1, max_steps * dims[name_id]])/scales[name_id]
+        else:
+            real_data = np.reshape(np.asarray(data, dtype=np.float32), [-1])
+        if name_id == 0:
+            indices = random.sample(range(len(real_data)), len(real_data))
+        Data.append(np.split(real_data[indices], len(real_data)/batch_size))
+    # print(time.time() - start_time)
+    return Data, len(real_data)/batch_size
+
 
 class data_buffer(object):
     """docstring for replay_buffer"""
@@ -41,7 +150,7 @@ class data_buffer(object):
                 batch_demo_img_seq.append(self.data[idx][2].astype(np.float32)/255.)
                 batch_demo_action_seq.append(self.data[idx][3])     
         else:
-            print 'no enough samples'
+            print('no enough samples')
 
         return [batch_img_seq, batch_action_seq, batch_demo_img_seq, batch_demo_action_seq]
 
@@ -82,50 +191,45 @@ def read_img_file(file_name, resize=None):
     rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
     return rgb_img, origin_img_dim
 
-def read_data_to_mem(data_path, max_step):
+def read_data_to_mem(data_path, max_step, img_size):
     start_time = time.time()
     mem = 0.
     data = []
     nums = []
     file_path_number_list = []
     file_list = os.listdir(data_path)
-    print 'Loading from '+data_path
+    print('Loading from '+data_path)
     for file_name in file_list:
-        if 'action' in file_name:
+        if 'flow' in file_name:
             nums.append(int(file_name[:file_name.find('_')]))
     nums = np.sort(nums).tolist()
     for num in nums:
         file_path_number_list.append(data_path+'/'+str(num))
-    print 'Found {} sequences!!'.format(len(file_path_number_list))
+    print('Found {} sequences!!'.format(len(file_path_number_list)))
     for file_path_number in file_path_number_list:
-        # a sequence
-        action_file_name = file_path_number + '_action.csv'
-        action_seq = np.reshape(read_csv_file(action_file_name), [-1, 2])
-        if len(action_seq) < max_step:
-            print 'acttion num incorrect'
-            continue
-        elif len(action_seq) > max_step:
-            action_seq = action_seq[:max_step, :]
-
+        # img sequence
         img_seq_path = file_path_number + '_image'
         img_file_list = os.listdir(img_seq_path)
         img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
-        
-        if len(img_file_list) < max_step:
-            print 'img num incorrect'
-            continue
-        elif len(img_file_list) > max_step:
+        if len(img_file_list) > max_step:
             img_file_list = img_file_list[:max_step]
         img_list = []
         for img_file_name in img_file_list:
             img_file_path = os.path.join(img_seq_path, img_file_name)
-            img = read_img_file(img_file_path)
+            img, origin_img_dim = read_img_file(img_file_path, img_size)
             img_list.append(img)
         img_seq = np.stack(img_list, axis=0)
-        data.append([img_seq, action_seq])
-    print 'Load {} seqs into memory with {:.1f}Mb in {:.1f}s '.format(len(data), 
+
+        # flow sequence
+        flow_file_name = file_path_number + '_flow.csv'
+        flow_seq = np.reshape(read_csv_file(flow_file_name), [-1, 2])[:, 0]/origin_img_dim[1]*50
+        if len(flow_seq) > max_step:
+            flow_seq = flow_seq[:max_step, :]
+
+        data.append([img_seq, flow_seq])
+    print('Load {} seqs into memory with {:.1f}Mb in {:.1f}s '.format(len(data), 
                                                                       get_size(data)/(1024.**2), 
-                                                                      time.time() - start_time)
+                                                                      time.time() - start_time))
     return data
 
 def moving_average(x, window_len):
@@ -201,7 +305,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         batch_demo_len[i] = len(batch_demo_indicies[i])
         batch_seq_len[i] = len(flow_seq)
 
-    # print 'sampled a batch in {:.1f}s '.format(time.time() - start_time)  
+    # print('sampled a batch in {:.1f}s '.format(time.time() - start_time))
     return [batch_demo_img_seq, 
             batch_demo_cmd_seq, 
             batch_img_seq,
@@ -216,14 +320,14 @@ def get_file_path_number_list(data_path_list):
     for data_path in data_path_list:
         nums = []
         file_list = os.listdir(data_path)
-        print 'Loading from '+data_path
+        print('Loading from '+data_path)
         for file_name in file_list:
             if 'action' in file_name:
                 nums.append(int(file_name[:file_name.find('_')]))
         nums = np.sort(nums).tolist()
         for num in nums:
             file_path_number_list.append(data_path+'/'+str(num))
-        print 'Found {} sequences!!'.format(len(file_path_number_list))
+        print('Found {} sequences!!'.format(len(file_path_number_list)))
     return file_path_number_list
 
 def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, img_size):
@@ -261,7 +365,7 @@ def read_a_batch_to_mem(file_path_number_list, start, batch_size, max_step, img_
     batch_data = get_a_batch(data, 0, batch_size, max_step, img_size)
     process_time = time.time() - start_time - read_time
 
-    # print 'read time: {:.2f}s, process time: {:.2f}s '.format(read_time, process_time)  
+    # print('read time: {:.2f}s, process time: {:.2f}s '.format(read_time, process_time) ) 
 
     return batch_data, end, False
 
@@ -287,13 +391,24 @@ def write_csv(data, file_path):
         if not isinstance(row, list):
             row = [row]
         writer.writerow(row)
+def save_file(file_name, data):
+    file = open(file_name, 'w')
+    writer = csv.writer(file, delimiter=',')
+    for idx, row in enumerate(data):
+        print('save {:}/{:} \r'.format(idx, len(data)), end="\r")
+        sys.stdout.flush() 
+        if not isinstance(row, list):
+            row = [row]
+        writer.writerow(row)
+    file.close()
+
 
 def batch_visualise(batch_data):
     batch_size = len(batch_data[0])
-    print 'batch_size:', batch_size
+    print('batch_size:', batch_size)
 
     for seq_no in xrange(6, batch_size):
-        print 'seq: ', seq_no
+        print('seq: ', seq_no)
         demo_img_seq = batch_data[0][seq_no]
         demo_cmd_seq = batch_data[1][seq_no]
         img_seq = batch_data[2][seq_no]
@@ -306,7 +421,7 @@ def batch_visualise(batch_data):
         fig, ax = plt.subplots(1, 2)
         x1=30
         y1=50
-        print 'demo_indicies: ', demo_indicies
+        print('demo_indicies: ', demo_indicies)
         demo_idx = 0
 
         for t in xrange(seq_len):
@@ -331,19 +446,30 @@ def batch_visualise(batch_data):
             # plt.show(block=False)
 
 if __name__ == '__main__':
-    data_path = sys.argv[1]
-    sub_data_folder = sys.argv[2]
-    sub_data_path = os.path.join(data_path, sub_data_folder)
-    print 'data_path: ', data_path
+    # data_path = sys.argv[1]
+    # sub_data_folder = sys.argv[2]
+    # sub_data_path = os.path.join(data_path, sub_data_folder)
+    # print('data_path: ', data_path)
+    # meta_file_path = sys.argv[3]
+    # print('meta_file_path: ', meta_file_path)
 
-    batch_size = 8
+    sub_data_path = '/Work/catkin_ws/data/vpf_data/mini'
+    meta_file_path = '/Work/catkin_ws/data/vpf_data/meta'
+
+
+    batch_size = 2
+    max_file_num = 2
     max_step = 200
     img_size = (96, 128)
 
     data_path_list = [sub_data_path]
     file_path_number_list = get_file_path_number_list(data_path_list)
-    data, start, term = read_a_batch_to_mem(file_path_number_list, 0, batch_size, max_step, img_size)
-    batch_visualise(data)
+    # data, start, term = read_a_batch_to_mem(file_path_number_list, 0, batch_size, max_step, img_size)
+    # batch_visualise(data)
+
+    # write_multiple_meta_files(data_path_list, meta_file_path, max_file_num, max_step, img_size)
+
+    data = read_data_to_mem(sub_data_path, max_step, img_size)
 
 
             

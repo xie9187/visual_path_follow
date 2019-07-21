@@ -39,9 +39,9 @@ flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu')
 
 # training param
-flag.DEFINE_string('data_dir',  '/Work/catkin_ws/data/vpf_data/localhost',
+flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
                     'Data directory')
-flag.DEFINE_string('model_dir', '/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
+flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('load_model_dir', ' ', 'load model directory.')
 flag.DEFINE_string('model_name', 'test_model', 'model name.')
 flag.DEFINE_integer('max_epoch', 100, 'max epochs.')
@@ -52,10 +52,19 @@ flag.DEFINE_boolean('test', False, 'whether to test.')
 flags = flag.FLAGS
 
 def training(sess, model):
-    seg_point = 5
-    file_path_number_list = data_utils.get_file_path_number_list([flags.data_dir])
-    file_path_number_list_train = file_path_number_list[:len(file_path_number_list)*seg_point/10]
-    file_path_number_list_valid = file_path_number_list[len(file_path_number_list)*seg_point/10:]
+    seg_point = 9
+    # file_path_number_list = data_utils.get_file_path_number_list([flags.data_dir])
+    # file_path_number_list_train = file_path_number_list[:len(file_path_number_list)*seg_point/10]
+    # file_path_number_list_valid = file_path_number_list[len(file_path_number_list)*seg_point/10:]
+
+    batch_size = flags.batch_size
+    max_step = flags.max_step
+    img_size = [flags.dim_rgb_h, flags.dim_rgb_w]
+    max_n_demo = flags.max_n_demo
+
+    data = data_utils.read_data_to_mem(flags.data_dir, flags.max_step, [flags.dim_rgb_h, flags.dim_rgb_w])
+    train_data = data[:len(data)*seg_point/10]
+    valid_data = data[-len(data)*seg_point/10:]
 
     model_dir = os.path.join(flags.model_dir, flags.model_name)
     if not os.path.exists(model_dir): 
@@ -89,21 +98,15 @@ def training(sess, model):
         loss_list = []
         opt_time = []
         end_flag = False
-        pos = 0
-        random.shuffle(file_path_number_list_train)
-        bar = progressbar.ProgressBar(maxval=len(file_path_number_list_train), \
+        random.shuffle(train_data)
+        bar = progressbar.ProgressBar(maxval=len(train_data)/batch_size, \
                                       widgets=[progressbar.Bar('=', '[', ']'), ' ', 
                                                progressbar.Percentage()])
-        while True:
+        for t in xrange(len(train_data)/batch_size):
             sample_start_time = time.time()
-            batch_data, pos, end_flag = data_utils.read_a_batch_to_mem(file_path_number_list_train, 
-                                                                       pos, 
-                                                                       flags.batch_size, 
-                                                                       flags.max_step, 
-                                                                       (flags.dim_rgb_h, flags.dim_rgb_w))
+            batch_data = data_utils.get_a_batch(train_data, t*batch_size, max_step, img_size, max_n_demo)
             sample_time = time.time() - sample_start_time
-            if end_flag:
-                break
+
             opt_start_time = time.time()
             cmd_prob, loss, _ = model.train(batch_data)
             opt_time_temp = time.time()-opt_start_time
@@ -112,7 +115,7 @@ def training(sess, model):
             print 'sample: {:.3f}s, opt: {:.3f}s'.format(sample_time, opt_time_temp)
 
             loss_list.append(loss)
-            bar.update(pos)
+            bar.update(t)
         bar.finish()
         loss_train = np.mean(loss_list)
 
@@ -120,15 +123,8 @@ def training(sess, model):
         loss_list = []
         end_flag = False
         pos = 0
-        while True:
-            batch_data, pos, end_flag = data_utils.read_a_batch_to_mem(file_path_number_list_train, 
-                                                                       pos, 
-                                                                       flags.batch_size, 
-                                                                       flags.max_step, 
-                                                                       (flags.dim_rgb_h, flags.dim_rgb_w))
-            if end_flag:
-                break
-            batch_demo_indicies = batch_data[-1]
+        for t in xrange(len(vali_data)/batch_size):
+            batch_data = data_utils.get_a_batch(vali_data, t*batch_size, max_step, img_size, max_n_demo)
             _, loss = model.valid(batch_data)
             loss_list.append(loss)
         loss_valid = np.mean(loss_list)
