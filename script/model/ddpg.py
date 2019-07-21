@@ -376,10 +376,10 @@ class DDPG(object):
 
             target_time = time.time() - start_time - sample_time - y_time - train_time
 
-            # print 'sample_time:{:.3f}, y_time:{:.3f}, train_time:{:.3f}, target_time:{:.3f}'.format(sample_time,
-            #                                                                                         y_time,
-            #                                                                                         train_time,
-            #                                                                                         target_time)
+            print 'sample_time:{:.3f}, y_time:{:.3f}, train_time:{:.3f}, target_time:{:.3f}'.format(sample_time,
+                                                                                                    y_time,
+                                                                                                    train_time,
+                                                                                                    target_time)
             
             return q
 
