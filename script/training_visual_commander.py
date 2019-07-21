@@ -39,7 +39,7 @@ flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_integer('gpu_num', 4, 'number of gpu')
 
 # training param
-flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/local',
+flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
                     'Data directory')
 flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('load_model_dir', ' ', 'load model directory.')
