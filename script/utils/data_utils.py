@@ -11,6 +11,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtrans
 import tensorflow as tf
+import progressbar
 
 
 origin_img_dim = (384, 512)
@@ -206,7 +207,10 @@ def read_data_to_mem(data_path, max_step, img_size):
     for num in nums:
         file_path_number_list.append(data_path+'/'+str(num))
     print('Found {} sequences!!'.format(len(file_path_number_list)))
-    for file_path_number in file_path_number_list:
+    bar = progressbar.ProgressBar(maxval=len(file_path_number_list), \
+                                  widgets=[progressbar.Bar('=', '[', ']'), ' ', 
+                                           progressbar.Percentage()])
+    for file_id, file_path_number in enumerate(file_path_number_list):
         # img sequence
         img_seq_path = file_path_number + '_image'
         img_file_list = os.listdir(img_seq_path)
@@ -227,6 +231,8 @@ def read_data_to_mem(data_path, max_step, img_size):
             flow_seq = flow_seq[:max_step, :]
 
         data.append([img_seq, flow_seq])
+        bar.update(file_id)
+    bar.finish()
     print('Load {} seqs into memory with {:.1f}Mb in {:.1f}s '.format(len(data), 
                                                                       get_size(data)/(1024.**2), 
                                                                       time.time() - start_time))
