@@ -212,7 +212,6 @@ class Critic(object):
                  dim_action,
                  dim_img,
                  dim_emb,
-                 dim_goal,
                  max_step,
                  dim_cmd,
                  n_hidden,
@@ -231,7 +230,6 @@ class Critic(object):
         self.dim_img = dim_img
         self.dim_action = dim_action
         self.dim_emb = dim_emb
-        self.dim_goal = dim_goal
         self.dim_cmd = dim_cmd
         self.max_step = max_step
         self.num_actor_vars = num_actor_vars

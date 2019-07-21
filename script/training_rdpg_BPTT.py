@@ -47,7 +47,7 @@ flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
 
 # training param
-flag.DEFINE_integer('max_training_step', 5000000, 'max step.')
+flag.DEFINE_integer('max_training_step', 2000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "rdpg_bptt", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 100000, 'How many training steps to do per checkpoint.')
@@ -90,8 +90,8 @@ def main(sess, robot_name='robot1'):
     for idx, v in enumerate(trainable_var):
         print "  var {:3}: {:15}   {}".format(idx, str(v.get_shape()), v.name)
         if not flags.test:    
-            with tf.name_scope(v.name.replace(':0', '')):
-                variable_summaries(v)
+            # with tf.name_scope(v.name.replace(':0', '')):
+            #     variable_summaries(v)
     if not flags.test:
         reward_ph = tf.placeholder(tf.float32, [], name='reward')
         q_ph = tf.placeholder(tf.float32, [], name='q_pred')
