@@ -21,7 +21,7 @@ RANDOM_SEED = 1234
 flag = tf.app.flags
 
 # network param
-flag.DEFINE_integer('batch_size', 2, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 128, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
 flag.DEFINE_integer('max_step', 200, 'max step.')
 flag.DEFINE_integer('max_n_demo', 10, 'max number of instructions')
@@ -36,10 +36,10 @@ flag.DEFINE_integer('dim_depth_w', 64, 'input depth image width.')
 flag.DEFINE_integer('dim_depth_c', 3, 'input depth image channels.')
 flag.DEFINE_integer('dim_emb', 64, 'dimension of embedding.')
 flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
-flag.DEFINE_integer('gpu_num', 1, 'number of gpu')
+flag.DEFINE_integer('gpu_num', 4, 'number of gpu')
 
 # training param
-flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/mini',
+flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/local',
                     'Data directory')
 flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('load_model_dir', ' ', 'load model directory.')
