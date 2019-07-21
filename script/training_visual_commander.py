@@ -112,7 +112,7 @@ def training(sess, model):
             opt_time_temp = time.time()-opt_start_time
             opt_time.append(time.time()-opt_start_time)
 
-            print 'sample: {:.3f}s, opt: {:.3f}s'.format(sample_time, opt_time_temp)
+            # print 'sample: {:.3f}s, opt: {:.3f}s'.format(sample_time, opt_time_temp)
 
             loss_list.append(loss)
             bar.update(t)
