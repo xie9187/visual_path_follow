@@ -37,6 +37,7 @@ flag.DEFINE_integer('dim_depth_c', 3, 'input depth image channels.')
 flag.DEFINE_integer('dim_emb', 64, 'dimension of embedding.')
 flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu')
+flag.DEFINE_string('demo_mode', 'sum', 'the mode of process guidance')
 
 # training param
 flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
@@ -161,7 +162,8 @@ def main():
                                                  n_cmd_type=flags.n_cmd_type,
                                                  learning_rate=flags.learning_rate,
                                                  gpu_num=flags.gpu_num,
-                                                 test=flags.test)
+                                                 test=flags.test,
+                                                 demo_mode=flags.demo_mode)
         if not flags.test:
             training(sess, model)
         else:

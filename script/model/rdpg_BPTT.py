@@ -428,7 +428,6 @@ class RDPG_BPTT(object):
                              dim_action=self.dim_action,
                              dim_img=self.dim_img,
                              dim_emb=self.dim_emb,
-                             dim_goal=self.dim_goal,
                              dim_cmd=self.dim_cmd,
                              n_cmd_type=self.n_cmd_type,
                              max_step=self.max_step,

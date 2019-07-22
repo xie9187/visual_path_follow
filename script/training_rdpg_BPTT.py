@@ -89,9 +89,9 @@ def main(sess, robot_name='robot1'):
     print "  [*] printing trainable variables"
     for idx, v in enumerate(trainable_var):
         print "  var {:3}: {:15}   {}".format(idx, str(v.get_shape()), v.name)
-        if not flags.test:    
-            # with tf.name_scope(v.name.replace(':0', '')):
-            #     variable_summaries(v)
+        # if not flags.test:    
+        #     with tf.name_scope(v.name.replace(':0', '')):
+        #         variable_summaries(v)
     if not flags.test:
         reward_ph = tf.placeholder(tf.float32, [], name='reward')
         q_ph = tf.placeholder(tf.float32, [], name='q_pred')
@@ -121,7 +121,7 @@ def main(sess, robot_name='robot1'):
     timeout_flag = False
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
-        if episode % 40 == 0 or timeout_flag:
+        if episode % 10 == 0 or timeout_flag:
             print 'randomising the environment'
             env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
             world.RandomTableAndMap()
