@@ -147,7 +147,7 @@ def training(sess, model):
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
 
 def main():
-    config = tf.ConfigProto(allow_soft_placement=True)
+    config = tf.ConfigProto(allow_soft_placement=False)
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:#
         model = commander_model.visual_commander(sess=sess,
