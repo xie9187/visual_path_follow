@@ -640,7 +640,7 @@ if __name__ == '__main__':
     print 'data_path: ',  arg
     data_path = arg  
     # data_path = '~/Work/catkin_ws/src/data/vpf_data/'
-    data_path = os.path.join(data_path, machine_id)
+    # data_path = os.path.join(data_path, machine_id)
 
     try:
         os.stat(data_path)
