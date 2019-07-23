@@ -76,44 +76,50 @@ class GridWorld(object):
             pos = np.random.randint(len(table), size=2)
             step = 0
             cnt = 0
+            unit = 2
             for t in xrange(T):
+                prev_pos = copy.deepcopy(pos)
                 if cnt < step:
                     cnt += 1
                 else:
                     d = np.random.randint(4)
-                    step = np.random.randint(2, 6)
+                    step = np.random.randint(1, 6)
                     cnt = 0
                 if d == 0:
-                    if pos[0] + 1 < self.table_size:
-                        pos[0] = pos[0] + 1  
+                    if pos[0] + unit < self.table_size:
+                        pos[0] = pos[0] + unit  
                     else: 
-                        pos[0] = pos[0] -1
+                        pos[0] = pos[0] - unit
                         d = (d + 2) % 4
                 elif d == 1:
-                    if pos[1] + 1 < self.table_size:
-                        pos[1] = pos[1] + 1
+                    if pos[1] + unit < self.table_size:
+                        pos[1] = pos[1] + unit
                     else:
-                        pos[1] = pos[1] - 1
+                        pos[1] = pos[1] - unit
                         d = (d + 2) % 4
                 elif d == 2:
-                    if pos[0] - 1 >= 0:
-                        pos[0] = pos[0] - 1
+                    if pos[0] - unit >= 0:
+                        pos[0] = pos[0] - unit
                     else:
-                        pos[0] = pos[0] + 1
+                        pos[0] = pos[0] + unit
                         d = (d + 2) % 4
                 else:
-                    if pos[1] - 1 >= 0:
-                        pos[1] = pos[1] - 1
+                    if pos[1] - unit >= 0:
+                        pos[1] = pos[1] - unit
                     else:
-                        pos[1] = pos[1] + 1
+                        pos[1] = pos[1] + unit
                         d = (d + 2) % 4
-                table[pos[1], pos[0]] = 0
+                if prev_pos[1] == pos[1] and prev_pos[0] != pos[0]:
+                    table[pos[1], min(prev_pos[0], pos[0]):max(prev_pos[0], pos[0])+1] = 0
+                elif prev_pos[0] == pos[0] and prev_pos[1] != pos[1]:
+                    table[min(prev_pos[1], pos[1]):max(prev_pos[1], pos[1])+1, pos[0]] = 0
+                
             return table
 
         self.table = np.ones((self.table_size, self.table_size))
         while sum(sum(self.table)) > self.table_size**2 * 0.8:
             self.table = np.ones((self.table_size, self.table_size))
-            self.table = random_walk(self.table, 50)
+            self.table = random_walk(self.table, 25)
 
         self.map = np.zeros((self.map_size, self.map_size))
         for x in xrange(self.table_size):
@@ -256,7 +262,9 @@ class GridWorld(object):
         real_path = []
         dist = 0.
         t = 0
-        while len(map_path) < 25 or len(map_path) > 40 :
+        for t in range(200):
+            assert t < 199, 'timeout'
+
             init_table_pos = np.random.randint(0, self.table_size, size=[2])
             goal_table_pos = np.random.randint(0, self.table_size, size=[2])
             # if self.check_neighbour_zeros(self.table, init_table_pos) > 4:
@@ -271,9 +279,21 @@ class GridWorld(object):
                                                                      init_table_pos[1], 
                                                                      goal_table_pos[0], 
                                                                      goal_table_pos[1]])
+            turn_num = 0
+            for idx in xrange(len(table_path)-2):
+                v_0 = np.asarray(table_path[idx+1]) - np.asarray(table_path[idx])
+                v_1 = np.asarray(table_path[idx+2]) - np.asarray(table_path[idx+1])
+                if (v_0 != v_1).any():
+                    turn_num += 1
+                    
+            if turn_num < 2:
+                continue
 
-            t += 1
-            assert t < 100, 'timeout'
+            if len(map_path) < 80:
+                break
+
+            
+
         init_yaw = np.arctan2(real_path[1][1] - real_path[0][1], real_path[1][0] - real_path[0][0])
         return table_path, map_path, real_path, [real_path[0][0], real_path[0][1], init_yaw]
 
@@ -640,7 +660,7 @@ if __name__ == '__main__':
     #     env.SetObjectPose(name, obj_pose_dict[name])
     # time.sleep(2.)
 
-    # map_path, real_path, init_pose = world.RandomPath()
+    # map_path, real_path, init_pose, _ = world.RandomPath()
     # env.SetObjectPose('robot1', init_pose)
 
     # fig.add_subplot(2, 2, 1)
