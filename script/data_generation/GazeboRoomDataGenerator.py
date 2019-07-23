@@ -285,7 +285,7 @@ class GridWorld(object):
                 v_1 = np.asarray(table_path[idx+2]) - np.asarray(table_path[idx+1])
                 if (v_0 != v_1).any():
                     turn_num += 1
-                    
+
             if turn_num < 2:
                 continue
 
@@ -570,7 +570,7 @@ def DataGenerate(data_path, robot_name='robot1'):
             start_time = time.time()
 
             terminate, result, reward = env.GetRewardAndTerminate(t, 
-                                                                  max_step=200, 
+                                                                  max_step=300, 
                                                                   len_route=len(dynamic_route))
             total_reward += reward
 
