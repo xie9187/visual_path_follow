@@ -609,6 +609,10 @@ def DataGenerate(data_path, robot_name='robot1'):
                                                            prev_cmd,
                                                            prev_last_cmd, 
                                                            prev_goal)
+            env.last_target_point = copy.deepcopy(env.target_point)
+            env.target_point = next_goal
+            local_next_goal = env.Global2Local([next_goal], pose)[0]
+            env.PathPublish(local_next_goal)
             env.CommandPublish(cmd)
 
             local_near_goal = env.GetLocalPoint(near_goal)
