@@ -10,7 +10,7 @@ import utils.data_utils as data_util
 def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
     # get flownet
     checkpoint = os.path.join(data_path, 'saved_network/flownet/flownet-S.ckpt-0')
-    img_dim = [img_size[1], img_size[0], 3]
+    img_dim = [img_size[0], img_size[1], 3]
     pred_flow_tf, input_a_tf, input_b_tf = get_flownet(img_dim, batch_size) # l,h,w,2
     saver = tf.train.Saver()
 
