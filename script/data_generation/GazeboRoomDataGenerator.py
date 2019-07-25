@@ -291,12 +291,10 @@ class GridWorld(object):
                     continue
 
                 if len(map_path) < 80:
-                    continue
+                    break
             else:
-                if len(map_path) < 50:
-                    continue  
-
-            
+                if len(map_path) < 25 and len(map_path) < 40 :
+                    break 
 
         init_yaw = np.arctan2(real_path[1][1] - real_path[0][1], real_path[1][0] - real_path[0][0])
         return table_path, map_path, real_path, [real_path[0][0], real_path[0][1], init_yaw]
@@ -644,37 +642,38 @@ def DataGenerate(data_path, robot_name='robot1'):
 if __name__ == '__main__':
     machine_id = socket.gethostname()
 
-    arg = sys.argv[1]
-    print 'data_path: ',  arg
-    data_path = arg  
+    # arg = sys.argv[1]
+    # print 'data_path: ',  arg
+    # data_path = arg  
+
     # data_path = '~/Work/catkin_ws/src/data/vpf_data/'
     # data_path = os.path.join(data_path, machine_id)
 
-    try:
-        os.stat(data_path)
-    except:
-        os.makedirs(data_path)
+    # try:
+    #     os.stat(data_path)
+    # except:
+    #     os.makedirs(data_path)
 
-    DataGenerate(data_path)
+    # DataGenerate(data_path)
 
-    # fig=plt.figure(figsize=(8, 6))
+    fig=plt.figure(figsize=(8, 6))
     # env = GazeboWorld('robot1')
-    # world = GridWorld()
-    # world.RandomTableAndMap()
-    # world.GetAugMap()
+    world = GridWorld()
+    world.RandomTableAndMap()
+    world.GetAugMap()
     # obj_list = env.GetModelStates()
     # obj_pose_dict = world.AllocateObject(obj_list)
     # for name in obj_pose_dict:
     #     env.SetObjectPose(name, obj_pose_dict[name])
     # time.sleep(2.)
 
-    # map_path, real_path, init_pose, _ = world.RandomPath()
+    map_path, real_path, init_pose, _ = world.RandomPath()
     # env.SetObjectPose('robot1', init_pose)
 
-    # fig.add_subplot(2, 2, 1)
-    # plt.imshow(world.table, origin='lower')
-    # fig.add_subplot(2, 2, 2)
-    # plt.imshow(world.aug_map, origin='lower')
-    # fig.add_subplot(2, 2, 3)
-    # plt.imshow(world.path_map, origin='lower')
-    # plt.show()
+    fig.add_subplot(2, 2, 1)
+    plt.imshow(world.table, origin='lower')
+    fig.add_subplot(2, 2, 2)
+    plt.imshow(world.aug_map, origin='lower')
+    fig.add_subplot(2, 2, 3)
+    plt.imshow(world.path_map, origin='lower')
+    plt.show()
