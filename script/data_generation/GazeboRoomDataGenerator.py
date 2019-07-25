@@ -291,10 +291,10 @@ class GridWorld(object):
                     continue
 
                 if len(map_path) < 80:
-                    break
+                    continue
             else:
                 if len(map_path) < 50:
-                    break     
+                    continue  
 
             
 
