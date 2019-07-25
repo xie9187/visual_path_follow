@@ -279,14 +279,14 @@ class GridWorld(object):
                                                                      init_table_pos[1], 
                                                                      goal_table_pos[0], 
                                                                      goal_table_pos[1]])
-            turn_num = 0
-            for idx in xrange(len(table_path)-2):
-                v_0 = np.asarray(table_path[idx+1]) - np.asarray(table_path[idx])
-                v_1 = np.asarray(table_path[idx+2]) - np.asarray(table_path[idx+1])
-                if (v_0 != v_1).any():
-                    turn_num += 1
 
             if long_path:
+                turn_num = 0
+                for idx in xrange(len(table_path)-2):
+                    v_0 = np.asarray(table_path[idx+1]) - np.asarray(table_path[idx])
+                    v_1 = np.asarray(table_path[idx+2]) - np.asarray(table_path[idx+1])
+                    if (v_0 != v_1).any():
+                        turn_num += 1
                 if turn_num < 2:
                     continue
 
