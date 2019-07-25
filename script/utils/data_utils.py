@@ -192,7 +192,7 @@ def read_img_file(file_name, resize=None):
     rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
     return rgb_img, origin_img_dim
 
-def read_data_to_mem(data_path, max_step, img_size):
+def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
     start_time = time.time()
     mem = 0.
     data = []
@@ -210,6 +210,8 @@ def read_data_to_mem(data_path, max_step, img_size):
     bar = progressbar.ProgressBar(maxval=len(file_path_number_list), \
                                   widgets=[progressbar.Bar('=', '[', ']'), ' ', 
                                            progressbar.Percentage()])
+    if max_data_len is not None:
+        file_path_number_list = file_path_number_list[:max_data_len]
     for file_id, file_path_number in enumerate(file_path_number_list):
         # img sequence
         img_seq_path = file_path_number + '_image'
@@ -249,7 +251,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
     batch_demo_img_seq = np.zeros([batch_size, max_demo_len, img_size[0], img_size[1], 3], dtype=np.float32)
     batch_demo_cmd_seq = np.zeros([batch_size, max_demo_len, 1], dtype=np.int32)
     batch_img_seq = np.zeros([batch_size, max_step, img_size[0], img_size[1], 3], dtype=np.float32)
-    batch_prev_cmd_sesq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
+    batch_prev_cmd_seq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
     batch_cmd_seq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
     batch_demo_indicies = [[] for i in xrange(batch_size)]
     batch_demo_len = np.zeros([batch_size], dtype=np.int32)
@@ -272,8 +274,8 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         lagged_cmd_seq = raw_cmd_seq + 2
         cmd_seq = np.r_[lagged_cmd_seq[lag:], np.ones_like(lagged_cmd_seq[:lag])*2]
         cmd_seq[-1] = 0
-        batch_prev_cmd_sesq[i, 0, :] = np.expand_dims(cmd_seq[0], axis=0) # 1
-        batch_prev_cmd_sesq[i, 1:len(cmd_seq), :] = np.expand_dims(cmd_seq[:-1], axis=1) # l, 1
+        batch_prev_cmd_seq[i, 0, :] = np.expand_dims(cmd_seq[0], axis=0) # 1
+        batch_prev_cmd_seq[i, 1:len(cmd_seq), :] = np.expand_dims(cmd_seq[:-1], axis=1) # l, 1
         batch_cmd_seq[i, :len(cmd_seq), :] = np.expand_dims(cmd_seq, axis=1) # l, 1
 
         # demo
@@ -292,30 +294,38 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         
         assert len(start_indicies) == len(end_indicies), 'length of turning start and end indicies not equal'
 
-        # # plot
-        # plt.figure(1)
-        # plt.plot(batch_prev_cmd_sesq[i, :, 0], 'r', 
-        #          batch_cmd_seq[i, :, 0], 'g', 
-        #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
-        #          end_indicies, np.ones_like(end_indicies)*2, 'yo')
-        # plt.show()
-
         n = 0
         for start_idx, end_idx in zip(start_indicies, end_indicies):
             demo_idx = max((start_idx+end_idx)/2, 0)
             batch_demo_indicies[i].append(demo_idx)
-            batch_demo_img_seq[i, n, :, :,: ] = img_seq[demo_idx, :, :, :]
+            batch_demo_img_seq[i, n, :, :, :] = img_seq[demo_idx, :, :, :]
             batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[demo_idx, :]
             n += 1
+        batch_demo_indicies[i].append(len(flow_seq)-1)
+        batch_demo_img_seq[i, n, :, :, :] = img_seq[len(flow_seq)-1, :, :, :]
+        batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[len(flow_seq)-1, :]
 
         batch_demo_len[i] = len(batch_demo_indicies[i])
         batch_seq_len[i] = len(flow_seq)
+
+        # # plot
+        # plt.figure(1)
+        # plt.plot(flow_seq, 'r', 
+        #          smoothed_flow_seq, 'g', 
+        #          lagged_cmd_seq, 'b',
+        #          cmd_seq, 'k',
+        #          np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'mo')
+        # # plt.plot(batch_prev_cmd_seq[i, :, 0], 'r', 
+        # #          batch_cmd_seq[i, :, 0], 'g', 
+        # #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
+        # #          end_indicies, np.ones_like(end_indicies)*2, 'yo')
+        # plt.show()
 
     # print('sampled a batch in {:.1f}s '.format(time.time() - start_time))
     return [batch_demo_img_seq, 
             batch_demo_cmd_seq, 
             batch_img_seq,
-            batch_prev_cmd_sesq,
+            batch_prev_cmd_seq,
             batch_cmd_seq, 
             batch_demo_len, 
             batch_seq_len, 
@@ -459,23 +469,24 @@ if __name__ == '__main__':
     # meta_file_path = sys.argv[3]
     # print('meta_file_path: ', meta_file_path)
 
-    sub_data_path = '/Work/catkin_ws/data/vpf_data/mini'
-    meta_file_path = '/Work/catkin_ws/data/vpf_data/meta'
+    sub_data_path = '/mnt/Work/catkin_ws/data/vpf_data/mini'
+    meta_file_path = '/mnt/Work/catkin_ws/data/vpf_data/meta'
 
 
-    batch_size = 2
+    batch_size = 8
     max_file_num = 2
-    max_step = 200
+    max_step = 300
     img_size = (96, 128)
+    max_n_demo = 10
 
-    data_path_list = [sub_data_path]
-    file_path_number_list = get_file_path_number_list(data_path_list)
+    # data_path_list = [sub_data_path]
+    # file_path_number_list = get_file_path_number_list(data_path_list)
     # data, start, term = read_a_batch_to_mem(file_path_number_list, 0, batch_size, max_step, img_size)
     # batch_visualise(data)
 
     # write_multiple_meta_files(data_path_list, meta_file_path, max_file_num, max_step, img_size)
 
-    data = read_data_to_mem(sub_data_path, max_step, img_size)
-
+    data = read_data_to_mem(sub_data_path, max_step, img_size, batch_size)
+    batch_data = get_a_batch(data, 0, batch_size, max_step, img_size, max_n_demo)
 
             

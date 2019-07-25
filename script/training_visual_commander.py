@@ -21,9 +21,9 @@ RANDOM_SEED = 1234
 flag = tf.app.flags
 
 # network param
-flag.DEFINE_integer('batch_size', 16, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 8, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
-flag.DEFINE_integer('max_step', 200, 'max step.')
+flag.DEFINE_integer('max_step', 300, 'max step.')
 flag.DEFINE_integer('max_n_demo', 10, 'max number of instructions')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
@@ -45,7 +45,7 @@ flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/local
 flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('load_model_dir', ' ', 'load model directory.')
 flag.DEFINE_string('model_name', 'vc_demo_sum', 'model name.')
-flag.DEFINE_integer('max_epoch', 200, 'max epochs.')
+flag.DEFINE_integer('max_epoch', 50, 'max epochs.')
 flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('test', False, 'whether to test.')
