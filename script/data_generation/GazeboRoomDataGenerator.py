@@ -293,7 +293,7 @@ class GridWorld(object):
                 if len(map_path) < 80:
                     break
             else:
-                if len(map_path) < 25:
+                if len(map_path) > 25:
                     break 
 
         init_yaw = np.arctan2(real_path[1][1] - real_path[0][1], real_path[1][0] - real_path[0][0])
@@ -667,7 +667,7 @@ if __name__ == '__main__':
     #     env.SetObjectPose(name, obj_pose_dict[name])
     # time.sleep(2.)
 
-    map_path, real_path, init_pose, _ = world.RandomPath()
+    map_path, real_path, init_pose, _ = world.RandomPath(False)
     # env.SetObjectPose('robot1', init_pose)
 
     fig.add_subplot(2, 2, 1)
