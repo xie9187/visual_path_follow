@@ -257,7 +257,7 @@ class GridWorld(object):
                    y_max = np.amin([y+augment_area+1, self.map_size])
                    self.aug_map[y_min:y_max, x_min:x_max]= 1
 
-    def RandomPath(self):
+    def RandomPath(self, long_path=True):
         map_path = []
         real_path = []
         dist = 0.
@@ -286,11 +286,15 @@ class GridWorld(object):
                 if (v_0 != v_1).any():
                     turn_num += 1
 
-            if turn_num < 2:
-                continue
+            if long_path:
+                if turn_num < 2:
+                    continue
 
-            if len(map_path) < 80:
-                break
+                if len(map_path) < 80:
+                    break
+            else:
+                if len(map_path) < 50:
+                    break     
 
             
 
