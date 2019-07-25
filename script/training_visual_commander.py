@@ -97,42 +97,55 @@ def training(sess, model):
     for epoch in range(flags.max_epoch):
         # training
         loss_list = []
+        acc_list = []
         opt_time = []
         end_flag = False
         random.shuffle(train_data)
-        bar = progressbar.ProgressBar(maxval=len(train_data)/batch_size, \
+        bar = progressbar.ProgressBar(maxval=len(train_data)/batch_size+len(valid_data)/batch_size, \
                                       widgets=[progressbar.Bar('=', '[', ']'), ' ', 
                                                progressbar.Percentage()])
+        all_t = 0
         for t in xrange(len(train_data)/batch_size):
             sample_start_time = time.time()
             batch_data = data_utils.get_a_batch(train_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
             sample_time = time.time() - sample_start_time
 
             opt_start_time = time.time()
-            cmd_prob, loss, _ = model.train(batch_data)
+            acc, loss, _ = model.train(batch_data)
             opt_time_temp = time.time()-opt_start_time
             opt_time.append(time.time()-opt_start_time)
 
             # print 'sample: {:.3f}s, opt: {:.3f}s'.format(sample_time, opt_time_temp)
 
             loss_list.append(loss)
-            bar.update(t)
-        bar.finish()
+            acc_list.append(acc)
+            all_t += 1
+            bar.update(all_t)
+
         loss_train = np.mean(loss_list)
+        acc_train = np.mean(acc_list)
 
         # validating
         loss_list = []
+        acc_list = []
         end_flag = False
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = data_utils.get_a_batch(valid_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
-            _, loss = model.valid(batch_data)
+            acc, loss = model.valid(batch_data)
             loss_list.append(loss)
+            acc_list.append(acc)
+            all_t += 1
+            bar.update(all_t)
+        bar.finish()
         loss_valid = np.mean(loss_list)
+        acc_valid = np.mean(acc_list)
 
         info_train = '| Epoch:{:3d}'.format(epoch) + \
                      '| TrainLoss: {:2.5f}'.format(loss_train) + \
                      '| TestLoss: {:2.5f}'.format(loss_valid) + \
+                     '| TrainAcc: {:2.5f}'.format(acc_train) + \
+                     '| TestAcc: {:2.5f}'.format(acc_valid) + \
                      '| Time(min): {:2.1f}'.format((time.time() - start_time)/60.) + \
                      '| OptTime(s): {:.4f}'.format(np.mean(opt_time))
         print info_train
@@ -140,6 +153,8 @@ def training(sess, model):
         summary = tf.Summary()
         summary.value.add(tag='TrainLoss', simple_value=float(loss_train))
         summary.value.add(tag='TestLoss', simple_value=float(loss_valid))
+        summary.value.add(tag='TrainAcc', simple_value=float(acc_train))
+        summary.value.add(tag='TestAcc', simple_value=float(acc_valid))
         # summary = sess.run(merged)
         summary_writer.add_summary(summary, epoch)
 

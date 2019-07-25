@@ -63,9 +63,12 @@ class visual_commander(object):
                           self.demo_len, 
                           self.seq_len]
                 # loss, self.prob = self.multi_gpu_model(inputs)
-                loss, self.prob = self.training_model(inputs)
+                loss, pred = self.training_model(inputs)
                 self.loss = reduce_sum(loss)/tf.cast(reduce_sum(self.seq_len), tf.float32)
                 self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
+                
+                correct_pred = tf.equal(pred, tf.reshape(self.label_cmd, [-1, max_step]))
+                self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
             else:
                 inputs = [self.input_demo_img, self.input_demo_cmd, self.input_img, self.input_prev_cmd, self.rnn_h_in, self.demo_len]
                 self.predict, self.rnn_h_out = self.testing_model(inputs)
@@ -122,16 +125,16 @@ class visual_commander(object):
         logits = model_utils.dense_layer(rnn_output, self.n_cmd_type, scope='logits', activation=None) # b*l, n_cmd_type
 
         # predict
-        prob_mask = tf.tile(tf.expand_dims(tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.float32), 
-                                      axis=2), [1, 1, self.n_cmd_type]) # b, l, n_cmd_type
-        prob = tf.reshape(tf.nn.softmax(logits), [-1, self.max_step, self.n_cmd_type]) * prob_mask # b, l, n_cmd_type
+        pred_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.int32) # b, l
+        pred = tf.argmax(tf.reshape(logits, [-1, self.max_step, self.n_cmd_type]), axis=2,
+                         output_type=tf.int32) * pred_mask # b, l
 
         # loss
         label_cmd = tf.reshape(label_cmd, [-1]) # b*l
         loss_mask = tf.reshape(tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.float32), [-1]) # b*l
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label_cmd, logits=logits) * loss_mask # b*l
 
-        return loss, prob
+        return loss, pred
 
     def testing_model(self, inputs):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, rnn_h_in, demo_len = inputs
@@ -216,7 +219,7 @@ class visual_commander(object):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, label_cmd, demo_len, seq_len, _ = data
         if not self.test:
             rnn_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)
-            return self.sess.run([self.prob, self.loss, self.opt], feed_dict={
+            return self.sess.run([self.accuracy, self.loss, self.opt], feed_dict={
                 self.input_demo_img: input_demo_img,
                 self.input_demo_cmd: input_demo_cmd,
                 self.input_img: input_img,
@@ -233,7 +236,7 @@ class visual_commander(object):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, label_cmd, demo_len, seq_len, _ = data
         if not self.test:
             rnn_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)
-            return self.sess.run([self.prob, self.loss], feed_dict={
+            return self.sess.run([self.accuracy, self.loss], feed_dict={
                 self.input_demo_img: input_demo_img,
                 self.input_demo_cmd: input_demo_cmd,
                 self.input_img: input_img,
