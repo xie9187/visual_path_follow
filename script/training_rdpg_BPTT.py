@@ -121,7 +121,7 @@ def main(sess, robot_name='robot1'):
     timeout_flag = False
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
-        if episode % 10 == 0 or timeout_flag:
+        if episode % 40 == 0 or timeout_flag:
             print 'randomising the environment'
             env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
             world.RandomTableAndMap()
