@@ -272,7 +272,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         batch_img_seq[i, :len(img_seq), :, :, :] = img_seq
         # a_seq
         batch_a_seq[i, 0, :] = action_seq[0, :]
-        batch_a_seq[i, 1:len(action_seq)-1, :] = action_seq[:-1, :]
+        batch_a_seq[i, 1:len(action_seq), :] = action_seq[:-1, :]
 
         flow_seq = np.reshape(flow_seq, [-1])
         smoothed_flow_seq = moving_average(flow_seq, 9) # l
