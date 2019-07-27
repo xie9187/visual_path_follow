@@ -48,8 +48,8 @@ class visual_commander(object):
             self.input_demo_cmd = tf.placeholder(tf.int32, shape=[None, max_n_demo, dim_cmd], name='input_demo_cmd') #b,l of demo,2
             self.input_img = tf.placeholder(tf.float32, shape=[None, max_step, dim_img[0], dim_img[1], dim_img[2]], name='input_img') #b,l,h,d,c
             self.input_prev_cmd = tf.placeholder(tf.int32, shape=[None, max_step, dim_cmd], name='input_prev_cmd') #b,l,1
-            self.input_prev_action = tf.placeholder(tf.float32, shape=[None, max_step, dim_cmd], name='input_prev_action') #b,l,2
-            self.label_cmd = tf.placeholder(tf.int32, shape=[None, max_step, dim_a], name='label_cmd') #b,l,1
+            self.input_prev_action = tf.placeholder(tf.float32, shape=[None, max_step, dim_a], name='input_prev_action') #b,l,2
+            self.label_cmd = tf.placeholder(tf.int32, shape=[None, max_step, dim_cmd], name='label_cmd') #b,l,1
             self.rnn_h_in = tf.placeholder(tf.float32, shape=[None, n_hidden], name='rnn_h_in') #b,n_hidden
             self.demo_len = tf.placeholder(tf.int32, shape=[None], name='demo_len') #b
             self.seq_len = tf.placeholder(tf.int32, shape=[None], name='seq_len') #b
