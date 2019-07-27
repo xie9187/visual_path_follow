@@ -232,7 +232,13 @@ def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
         if len(flow_seq) > max_step:
             flow_seq = flow_seq[:max_step, :]
 
-        data.append([img_seq, flow_seq])
+        # action sequence
+        action_file_name = file_path_number + '_action.csv'
+        action_seq = np.reshape(read_csv_file(action_file_name), [-1, 2])
+        if len(action_seq) > max_step:
+            action_seq = action_seq[:max_step, :]
+
+        data.append([img_seq, flow_seq, action_seq])
         bar.update(file_id)
     bar.finish()
     print('Load {} seqs into memory with {:.1f}Mb in {:.1f}s '.format(len(data), 
@@ -253,6 +259,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
     batch_img_seq = np.zeros([batch_size, max_step, img_size[0], img_size[1], 3], dtype=np.float32)
     batch_prev_cmd_seq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
     batch_cmd_seq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
+    batch_a_seq = np.zeros([batch_size, max_step, 2], dtype=np.float32)
     batch_demo_indicies = [[] for i in xrange(batch_size)]
     batch_demo_len = np.zeros([batch_size], dtype=np.int32)
     batch_seq_len = np.zeros([batch_size], dtype=np.int32)
@@ -260,7 +267,12 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         idx = start + i
         flow_seq = data[idx][1] # l, 1
         img_seq = data[idx][0].astype(np.float32)/255. # l, h, w, c
+        action_seq = data[idx][2] # l, 2
+        # img_seq
         batch_img_seq[i, :len(img_seq), :, :, :] = img_seq
+        # a_seq
+        batch_a_seq[i, 0, :] = action_seq[0, :]
+        batch_a_seq[i, 1:len(action_seq)-1, :] = action_seq[:-1, :]
 
         flow_seq = np.reshape(flow_seq, [-1])
         smoothed_flow_seq = moving_average(flow_seq, 9) # l
@@ -326,7 +338,8 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
             batch_demo_cmd_seq, 
             batch_img_seq,
             batch_prev_cmd_seq,
-            batch_cmd_seq, 
+            batch_a_seq,
+            batch_cmd_seq,
             batch_demo_len, 
             batch_seq_len, 
             batch_demo_indicies]

@@ -35,6 +35,7 @@ class visual_commander(object):
         self.dim_cmd = dim_cmd
         self.dim_img = dim_img
         self.dim_emb = dim_emb
+        self.dim_a = dim_a
         self.n_cmd_type = n_cmd_type
         self.learning_rate = learning_rate
         self.gpu_num = gpu_num
@@ -46,7 +47,8 @@ class visual_commander(object):
             self.input_demo_cmd = tf.placeholder(tf.int32, shape=[None, max_n_demo, dim_cmd], name='input_demo_cmd') #b,l of demo,2
             self.input_img = tf.placeholder(tf.float32, shape=[None, max_step, dim_img[0], dim_img[1], dim_img[2]], name='input_img') #b,l,h,d,c
             self.input_prev_cmd = tf.placeholder(tf.int32, shape=[None, max_step, dim_cmd], name='input_prev_cmd') #b,l,1
-            self.label_cmd = tf.placeholder(tf.int32, shape=[None, max_step, dim_cmd], name='label_cmd') #b,l,1
+            self.input_prev_action = tf.placeholder(tf.float32, shape=[None, max_step, dim_cmd], name='input_prev_action') #b,l,2
+            self.label_cmd = tf.placeholder(tf.int32, shape=[None, max_step, dim_a], name='label_cmd') #b,l,1
             self.rnn_h_in = tf.placeholder(tf.float32, shape=[None, n_hidden], name='rnn_h_in') #b,n_hidden
             self.demo_len = tf.placeholder(tf.int32, shape=[None], name='demo_len') #b
             self.seq_len = tf.placeholder(tf.int32, shape=[None], name='seq_len') #b
@@ -59,6 +61,7 @@ class visual_commander(object):
                           self.input_demo_cmd, 
                           self.input_img, 
                           self.input_prev_cmd, 
+                          self.input_prev_action,
                           self.label_cmd, 
                           self.demo_len, 
                           self.seq_len]
@@ -98,12 +101,14 @@ class visual_commander(object):
         return outputs
 
     def training_model(self, inputs):
-        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, label_cmd, demo_len, seq_len = inputs
+        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len = inputs
 
         # process observation
         input_img = tf.reshape(input_img, [-1]+self.dim_img) # b*l, dim_img
         img_vect = self.encode_image(input_img) # b*l, dim_img_feat
-        prev_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_prev_cmd), [-1, self.dim_emb]) # b * l, dim_emb
+        prev_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_prev_cmd), [-1, self.dim_emb]) # b*l, dim_emb
+        input_prev_action = tf.reshape(input_prev_action, [-1, self.max_step, self.dim_a]) # b*l, dim_a
+        prev_a_vect = model_utils.dense_layer(input_prev_action, self.dim_emb, scope='a_embedding', activation=None) # b*l, dim_emb
 
         # process demo
         if self.demo_mode == 'sum':
@@ -111,7 +116,7 @@ class visual_commander(object):
         elif self.demo_mode == 'hard':
             demo_dense_seq = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, False)
         # all inputs
-        all_inputs = tf.concat([demo_dense_seq, img_vect, prev_cmd_vect], axis=1) # b*l, n_hidden+dim_img_feat+dim_emb
+        all_inputs = tf.concat([demo_dense_seq, img_vect, prev_cmd_vect, prev_a_vect], axis=1) # b*l, n_hidden+dim_img_feat+dim_emb*2
         inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b, n_hidden
 
         # rnn
@@ -137,19 +142,21 @@ class visual_commander(object):
         return loss, pred
 
     def testing_model(self, inputs):
-        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, rnn_h_in, demo_len = inputs
+        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, rnn_h_in, demo_len = inputs
         # process observation
         input_img = tf.reshape(input_img, [-1]+self.dim_img) # b, dim_img
         img_vect = self.encode_image(input_img) # b, dim_img_feat
         prev_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_prev_cmd), [-1, self.dim_emb]) # b, dim_emb
-        
+        input_prev_action = tf.reshape(input_prev_action, [-1, self.dim_a]) # b, dim_a
+        prev_a_vect = model_utils.dense_layer(input_prev_action, self.dim_emb, scope='a_embedding', activation=None) # b, dim_emb
+
         # process demo
         if self.demo_mode == 'sum':
             _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
         elif self.demo_mode == 'hard':
             demo_dense = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, True)
 
-        all_inputs = tf.concat([demo_dense, img_vect, prev_cmd_vect], axis=1) # b, n_hidden+dim_img_feat+dim_emb    
+        all_inputs = tf.concat([demo_dense, img_vect, prev_cmd_vect, prev_a_vect], axis=1) # b, n_hidden+dim_img_feat+dim_emb*2    
         inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b, n_hidden
         rnn_output, rnn_h_out = rnn_cell(inputs_dense, rnn_h_in) # b, n_hidden | b, n_hidden
         logits = model_utils.dense_layer(rnn_output, self.n_cmd_type, scope='logits', activation=None) # b, n_cmd_type
@@ -216,7 +223,7 @@ class visual_commander(object):
 
 
     def train(self, data):
-        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, label_cmd, demo_len, seq_len, _ = data
+        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
         if not self.test:
             rnn_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)
             return self.sess.run([self.accuracy, self.loss, self.opt], feed_dict={
@@ -224,6 +231,7 @@ class visual_commander(object):
                 self.input_demo_cmd: input_demo_cmd,
                 self.input_img: input_img,
                 self.input_prev_cmd: input_prev_cmd,
+                self.input_prev_action: input_prev_action,
                 self.label_cmd: label_cmd,
                 self.demo_len: demo_len,
                 self.seq_len: seq_len,
@@ -233,7 +241,7 @@ class visual_commander(object):
             return [], [], []
 
     def valid(self, data):
-        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, label_cmd, demo_len, seq_len, _ = data
+        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
         if not self.test:
             rnn_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)
             return self.sess.run([self.accuracy, self.loss], feed_dict={
@@ -241,6 +249,7 @@ class visual_commander(object):
                 self.input_demo_cmd: input_demo_cmd,
                 self.input_img: input_img,
                 self.input_prev_cmd: input_prev_cmd,
+                self.input_prev_action: input_prev_action,
                 self.label_cmd: label_cmd,
                 self.demo_len: demo_len,
                 self.seq_len: seq_len,
@@ -249,7 +258,7 @@ class visual_commander(object):
         else:
             return [], []
 
-    def predict(input_demo_img, input_demo_cmd, input_img, input_prev_cmd, demo_len, t):
+    def predict(input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, demo_len, t):
         if t == 0:
             rnn_h_in = np.zeros([1, self.n_hidden], np.float32)
         else:
@@ -259,6 +268,7 @@ class visual_commander(object):
                                                       self.input_demo_cmd: input_demo_cmd,
                                                       self.input_img: input_img,
                                                       self.input_prev_cmd: input_prev_cmd,
+                                                      self.input_prev_action: input_prev_action,
                                                       self.demo_len: demo_len,
                                                       self.rnn_h_in: rnn_h_in
                                                       })
