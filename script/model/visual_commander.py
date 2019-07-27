@@ -108,7 +108,7 @@ class visual_commander(object):
         input_img = tf.reshape(input_img, [-1]+self.dim_img) # b*l, dim_img
         img_vect = self.encode_image(input_img) # b*l, dim_img_feat
         prev_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_prev_cmd), [-1, self.dim_emb]) # b*l, dim_emb
-        input_prev_action = tf.reshape(input_prev_action, [-1, self.max_step, self.dim_a]) # b*l, dim_a
+        input_prev_action = tf.reshape(input_prev_action, [-1, self.dim_a]) # b*l, dim_a
         prev_a_vect = model_utils.dense_layer(input_prev_action, self.dim_emb, scope='a_embedding', activation=None) # b*l, dim_emb
 
         # process demo
