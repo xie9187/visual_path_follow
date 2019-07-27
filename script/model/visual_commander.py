@@ -21,6 +21,7 @@ class visual_commander(object):
                  dim_cmd,
                  dim_img,
                  dim_emb,
+                 dim_a,
                  n_cmd_type,
                  learning_rate,
                  gpu_num,
