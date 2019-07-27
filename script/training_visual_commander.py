@@ -36,6 +36,7 @@ flag.DEFINE_integer('dim_depth_w', 64, 'input depth image width.')
 flag.DEFINE_integer('dim_depth_c', 3, 'input depth image channels.')
 flag.DEFINE_integer('dim_emb', 64, 'dimension of embedding.')
 flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
+flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu')
 flag.DEFINE_string('demo_mode', 'sum', 'the mode of process guidance')
 
@@ -174,6 +175,7 @@ def main():
                                                  dim_cmd=flags.dim_cmd,
                                                  dim_img=[flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c],
                                                  dim_emb=flags.dim_emb,
+                                                 dim_a=flags.dim_a,
                                                  n_cmd_type=flags.n_cmd_type,
                                                  learning_rate=flags.learning_rate,
                                                  gpu_num=flags.gpu_num,
