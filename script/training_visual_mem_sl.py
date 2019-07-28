@@ -27,8 +27,8 @@ flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
 flag.DEFINE_integer('max_step', 80, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
-flag.DEFINE_integer('dim_img_h', 96, 'input image height.')
-flag.DEFINE_integer('dim_img_w', 128, 'input image width.')
+flag.DEFINE_integer('dim_rgb_h', 96, 'input image height.') # 96
+flag.DEFINE_integer('dim_img_w', 128, 'input image width.') # 128
 flag.DEFINE_integer('dim_img_c', 3, 'input image channels.')
 flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
 flag.DEFINE_integer('demo_len', 20, 'length of demo.')
@@ -37,6 +37,7 @@ flag.DEFINE_boolean('use_demo_image', False, 'whether to use image in demo.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_boolean('use_flownet', False, 'whether to use flownet')
+flag.DEFINE_boolean('freeze_flownet', False, 'freeze the weights of flownet')
 
 # training param
 flag.DEFINE_string('data_dir',  '/mnt/Work/catkin_ws/data/vpf_data/localhost',

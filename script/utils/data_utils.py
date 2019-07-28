@@ -285,7 +285,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         # cmd_seq
         lagged_cmd_seq = raw_cmd_seq + 2
         cmd_seq = np.r_[lagged_cmd_seq[lag:], np.ones_like(lagged_cmd_seq[:lag])*2]
-        cmd_seq[-1] = 0
+        cmd_seq[-10:] = 0
         batch_prev_cmd_seq[i, 0, :] = np.expand_dims(cmd_seq[0], axis=0) # 1
         batch_prev_cmd_seq[i, 1:len(cmd_seq), :] = np.expand_dims(cmd_seq[:-1], axis=1) # l, 1
         batch_cmd_seq[i, :len(cmd_seq), :] = np.expand_dims(cmd_seq, axis=1) # l, 1
@@ -298,7 +298,9 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         flow_d = np.r_[flow_d, [0.]] # l
         start_indicies = np.where(flow_d == 1)[0]
         end_indicies = np.where(flow_d == -1)[0]
-	
+	       
+        end_indicies = np.r_[end_indicies, len(flow_d)]
+
         if len(start_indicies) - len(end_indicies) == 1:
             end_indicies = np.r_[end_indicies, len(flow_d)]
         elif len(start_indicies) - len(end_indicies) == -1:
@@ -313,9 +315,9 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
             batch_demo_img_seq[i, n, :, :, :] = img_seq[demo_idx, :, :, :]
             batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[demo_idx, :]
             n += 1
-        batch_demo_indicies[i].append(len(flow_seq)-1)
-        batch_demo_img_seq[i, n, :, :, :] = img_seq[len(flow_seq)-1, :, :, :]
-        batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[len(flow_seq)-1, :]
+        # batch_demo_indicies[i].append(len(flow_seq)-1)
+        # batch_demo_img_seq[i, n, :, :, :] = img_seq[len(flow_seq)-1, :, :, :]
+        # batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[len(flow_seq)-1, :]
 
         batch_demo_len[i] = len(batch_demo_indicies[i])
         batch_seq_len[i] = len(flow_seq)
@@ -326,7 +328,9 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         #          smoothed_flow_seq, 'g', 
         #          lagged_cmd_seq, 'b',
         #          cmd_seq, 'k',
-        #          np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'mo')
+        #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
+        #          end_indicies, np.ones_like(end_indicies)*2, 'yo',
+        #          np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'go')
         # # plt.plot(batch_prev_cmd_seq[i, :, 0], 'r', 
         # #          batch_cmd_seq[i, :, 0], 'g', 
         # #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
@@ -499,7 +503,7 @@ if __name__ == '__main__':
 
     # write_multiple_meta_files(data_path_list, meta_file_path, max_file_num, max_step, img_size)
 
-    data = read_data_to_mem(sub_data_path, max_step, img_size, batch_size)
-    batch_data = get_a_batch(data, 0, batch_size, max_step, img_size, max_n_demo)
+    data = read_data_to_mem(sub_data_path, max_step, img_size)
+    batch_data = get_a_batch(data, 0, batch_size*16, max_step, img_size, max_n_demo)
 
             
