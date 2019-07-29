@@ -11,6 +11,7 @@ import utils.model_utils as model_utils
 import model.visual_commander as commander_model
 import progressbar
 import rospy
+import matplotlib.pyplot as plt
 
 from data_generation.GazeboRoomDataGenerator import GridWorld, FileProcess
 from data_generation.GazeboWorld import GazeboWorld
@@ -49,7 +50,8 @@ flag.DEFINE_string('model_name', 'vc_demo_sum', 'model name.')
 flag.DEFINE_integer('max_epoch', 50, 'max epochs.')
 flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
-flag.DEFINE_boolean('test', False, 'whether to test.')
+flag.DEFINE_boolean('online_test', False, 'online test.')
+flag.DEFINE_boolean('offline_test', False, 'offline test test with batches.')
 
 flags = flag.FLAGS
 
@@ -133,7 +135,7 @@ def training(sess, model):
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = data_utils.get_a_batch(valid_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
-            acc, loss = model.valid(batch_data)
+            acc, loss, _, _ = model.valid(batch_data)
             loss_list.append(loss)
             acc_list.append(acc)
             all_t += 1
@@ -162,6 +164,70 @@ def training(sess, model):
         if flags.save_model and (epoch+1)%10 == 0:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
 
+def offline_testing(sess, model):
+    batch_size = flags.batch_size
+    max_step = flags.max_step
+    img_size = [flags.dim_rgb_h, flags.dim_rgb_w]
+    max_n_demo = flags.max_n_demo
+
+    data = data_utils.read_data_to_mem(flags.data_dir, flags.max_step, [flags.dim_rgb_h, flags.dim_rgb_w])
+
+    model_dir = os.path.join(flags.model_dir, flags.model_name)
+
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+    sess.run(init_op)
+
+    trainable_var = tf.trainable_variables()
+    part_var = []
+    for idx, v in enumerate(trainable_var):
+        print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
+
+    saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
+
+    checkpoint = tf.train.get_checkpoint_state(model_dir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+        saver.restore(sess, checkpoint.model_checkpoint_path)
+        print 'model loaded: ', checkpoint.model_checkpoint_path 
+    else:
+        print 'model not found'
+
+    # random.shuffle(data)
+    batch_data = data_utils.get_a_batch(data, 0, batch_size, max_step, img_size, max_n_demo)
+    acc, loss, pred_cmd, att_pos = model.valid(batch_data)
+
+    plt.switch_backend('wxAgg') 
+    fig, axes = plt.subplots(batch_size/2, 2)
+    for i in xrange(batch_size):
+        demo_img_seq = batch_data[0][i, :, :, :]
+        demo_cmd_seq = batch_data[1][i, :]
+        img_seq = batch_data[2][i, :, :, :]
+        prev_cmd_seq = batch_data[3][i, :]
+        a_seq = batch_data[4][i, :]
+        cmd_seq = batch_data[5][i, :]
+        demo_len = batch_data[6][i] 
+        seq_len = batch_data[7][i] 
+        demo_indicies = batch_data[8][i]
+
+        demo_pos = np.zeros([max_step], dtype=np.int64)
+        start = 0
+        for pos, end in enumerate(demo_indicies):
+            demo_pos[start:end] = pos
+            start = end
+
+        # plot
+        axes[i%(batch_size/2), i/(batch_size/2)].plot(cmd_seq[:, 0], 'r', linewidth=2.0, label='label_cmd')
+        axes[i%(batch_size/2), i/(batch_size/2)].plot(pred_cmd[i, :], 'g--', linewidth=2.0, label='pred_cmd')
+        axes[i%(batch_size/2), i/(batch_size/2)].plot(a_seq[:, 1]*2, 'b', linewidth=2.0, label='ang_v(x2)')
+        axes[i%(batch_size/2), i/(batch_size/2)].plot(demo_pos, 'c', linewidth=2.0, label='demo pos')
+        axes[i%(batch_size/2), i/(batch_size/2)].plot(att_pos[i, :], 'm--', linewidth=2.0, label='attention pos')
+        leg = axes[i%(batch_size/2), i/(batch_size/2)].legend()
+    mng = plt.get_current_fig_manager()
+    mng.frame.Maximize(True)
+    plt.show()
+
+def online_testing(sess, model):
+    pass
+
 def main():
     config = tf.ConfigProto(allow_soft_placement=False)
     config.gpu_options.allow_growth = True
@@ -179,12 +245,15 @@ def main():
                                                  n_cmd_type=flags.n_cmd_type,
                                                  learning_rate=flags.learning_rate,
                                                  gpu_num=flags.gpu_num,
-                                                 test=flags.test,
+                                                 test=flags.online_test,
                                                  demo_mode=flags.demo_mode)
-        if not flags.test:
-            training(sess, model)
+        if flags.online_test:
+            online_testing(sess, model)
+        elif flags.offline_test:
+            offline_testing(sess, model)
         else:
-            testing(sess, model)
+            training(sess, model)
+            
 
 if __name__ == '__main__':
     main()  
