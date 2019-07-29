@@ -68,7 +68,7 @@ def training(sess, model):
 
     data = data_utils.read_data_to_mem(flags.data_dir, flags.max_step, [flags.dim_rgb_h, flags.dim_rgb_w])
     train_data = data[:len(data)*seg_point/10]
-    valid_data = data[-len(data)*seg_point/10:]
+    valid_data = data[len(data)*seg_point/10:]
 
     model_dir = os.path.join(flags.model_dir, flags.model_name)
     if not os.path.exists(model_dir): 
@@ -118,7 +118,7 @@ def training(sess, model):
             opt_time_temp = time.time()-opt_start_time
             opt_time.append(time.time()-opt_start_time)
 
-            print 'sample: {:.3f}s, opt: {:.3f}s'.format(sample_time, opt_time_temp)
+            # print 'sample: {:.3f}s, opt: {:.3f}s'.format(sample_time, opt_time_temp)
 
             loss_list.append(loss)
             acc_list.append(acc)
