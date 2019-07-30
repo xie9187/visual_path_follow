@@ -183,9 +183,11 @@ class visual_commander(object):
         elif self.demo_mode == 'semi':
             demo_dense, att_pos = self.process_demo_semi_att(input_demo_img, input_demo_cmd, img_vect, True)
 
-        if self.inputs_num == 2:
+        if self.inputs_num <= 2:
+            all_inputs = demo_dense
+        if self.inputs_num == 3:
             all_inputs = tf.concat([demo_dense, img_vect], axis=1) # b, n_hidden+dim_img_feat
-        elif self.inputs_num == 4:
+        elif self.inputs_num == 5:
             all_inputs = tf.concat([demo_dense, img_vect, prev_cmd_vect, prev_a_vect], axis=1) # b, n_hidden+dim_img_feat+dim_emb*2
         inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b, n_hidden
         
