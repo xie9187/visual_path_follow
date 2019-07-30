@@ -81,11 +81,22 @@ def training(sess, model):
     part_var = []
     for idx, v in enumerate(trainable_var):
         print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
-        with tf.name_scope(v.name.replace(':0', '')):
-            model_utils.variable_summaries(v)
+        # with tf.name_scope(v.name.replace(':0', '')):
+        #     model_utils.variable_summaries(v)
 
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
     saver = tf.train.Saver(max_to_keep=5)
+
+    train_loss_ph = tf.placeholder(tf.float32, [], name='train_loss_ph')
+    test_loss_ph = tf.placeholder(tf.float32, [], name='test_loss_ph')
+    train_acc_ph = tf.placeholder(tf.float32, [], name='train_acc_ph')
+    test_acc_ph = tf.placeholder(tf.float32, [], name='test_acc_ph')
+    tf.summary.scalar('train_loss', train_loss_ph)
+    tf.summary.scalar('test_loss', test_loss_ph)
+    tf.summary.scalar('train_acc', train_acc_ph)
+    tf.summary.scalar('test_acc', test_acc_ph)
+    merged = tf.summary.merge_all()
+    summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
     if flags.load_model:
         checkpoint = tf.train.get_checkpoint_state(model_dir)
@@ -136,6 +147,7 @@ def training(sess, model):
         for t in xrange(len(valid_data)/batch_size):
             batch_data = data_utils.get_a_batch(valid_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
             acc, loss, _, _ = model.valid(batch_data)
+
             loss_list.append(loss)
             acc_list.append(acc)
             all_t += 1
@@ -153,14 +165,12 @@ def training(sess, model):
                      '| OptTime(s): {:.4f}'.format(np.mean(opt_time))
         print info_train
 
-        summary = tf.Summary()
-        summary.value.add(tag='TrainLoss', simple_value=float(loss_train))
-        summary.value.add(tag='TestLoss', simple_value=float(loss_valid))
-        summary.value.add(tag='TrainAcc', simple_value=float(acc_train))
-        summary.value.add(tag='TestAcc', simple_value=float(acc_valid))
-        # summary = sess.run(merged)
+        summary = sess.run(merged, feed_dict={train_loss_ph: loss_train,
+                                              test_loss_ph: loss_valid,
+                                              train_acc_ph: acc_train,
+                                              test_acc_ph: acc_valid
+                                              })
         summary_writer.add_summary(summary, epoch)
-
         if flags.save_model and (epoch+1)%10 == 0:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
 
