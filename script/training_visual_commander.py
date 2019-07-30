@@ -39,7 +39,9 @@ flag.DEFINE_integer('dim_emb', 64, 'dimension of embedding.')
 flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu')
-flag.DEFINE_string('demo_mode', 'sum', 'the mode of process guidance')
+flag.DEFINE_string('demo_mode', 'hard', 'the mode of process guidance (hard, sum)')
+flag.DEFINE_string('post_att_model', 'gru', 'the model to use after attention (gru, dense, none)')
+flag.DEFINE_integer('inputs_num', 3, 'how many kinds of inputs used (2, 4)')
 
 # training param
 flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
@@ -201,39 +203,43 @@ def offline_testing(sess, model):
     else:
         print 'model not found'
 
-    # random.shuffle(data)
-    batch_data = data_utils.get_a_batch(data, 0, batch_size, max_step, img_size, max_n_demo)
-    acc, loss, pred_cmd, att_pos = model.valid(batch_data)
-
     plt.switch_backend('wxAgg') 
-    fig, axes = plt.subplots(batch_size/2, 2)
-    for i in xrange(batch_size):
-        demo_img_seq = batch_data[0][i, :, :, :]
-        demo_cmd_seq = batch_data[1][i, :]
-        img_seq = batch_data[2][i, :, :, :]
-        prev_cmd_seq = batch_data[3][i, :]
-        a_seq = batch_data[4][i, :]
-        cmd_seq = batch_data[5][i, :]
-        demo_len = batch_data[6][i] 
-        seq_len = batch_data[7][i] 
-        demo_indicies = batch_data[8][i]
+    
+    for batch_id in xrange(len(data)/batch_size):
+        fig, axes = plt.subplots(batch_size/2, 2, sharex=True, figsize=(8,12))
+        batch_data = data_utils.get_a_batch(data, batch_id*batch_size, batch_size, max_step, img_size, max_n_demo)
+        acc, loss, pred_cmd, att_pos = model.valid(batch_data)
+        for i in xrange(batch_size):
+            demo_img_seq = batch_data[0][i, :, :, :]
+            demo_cmd_seq = batch_data[1][i, :]
+            img_seq = batch_data[2][i, :, :, :]
+            prev_cmd_seq = batch_data[3][i, :]
+            a_seq = batch_data[4][i, :]
+            cmd_seq = batch_data[5][i, :]
+            demo_len = batch_data[6][i] 
+            seq_len = batch_data[7][i] 
+            demo_indicies = batch_data[8][i]
 
-        demo_pos = np.zeros([max_step], dtype=np.int64)
-        start = 0
-        for pos, end in enumerate(demo_indicies):
-            demo_pos[start:end] = pos
-            start = end
+            demo_pos = np.zeros([max_step], dtype=np.int64)
+            start = 0
+            for pos, end in enumerate(demo_indicies):
+                demo_pos[start:end] = pos
+                start = end
 
-        # plot
-        axes[i%(batch_size/2), i/(batch_size/2)].plot(cmd_seq[:, 0], 'r', linewidth=2.0, label='label_cmd')
-        axes[i%(batch_size/2), i/(batch_size/2)].plot(pred_cmd[i, :], 'g--', linewidth=2.0, label='pred_cmd')
-        axes[i%(batch_size/2), i/(batch_size/2)].plot(a_seq[:, 1]*2, 'b', linewidth=2.0, label='ang_v(x2)')
-        axes[i%(batch_size/2), i/(batch_size/2)].plot(demo_pos, 'c', linewidth=2.0, label='demo pos')
-        axes[i%(batch_size/2), i/(batch_size/2)].plot(att_pos[i, :], 'm--', linewidth=2.0, label='attention pos')
-        leg = axes[i%(batch_size/2), i/(batch_size/2)].legend()
-    mng = plt.get_current_fig_manager()
-    mng.frame.Maximize(True)
-    plt.show()
+            # plot
+            axes[i%(batch_size/2), i/(batch_size/2)].plot(cmd_seq[:, 0], 'r', linewidth=1.0, label='label_cmd')
+            axes[i%(batch_size/2), i/(batch_size/2)].plot(pred_cmd[i, :], 'g--', linewidth=1.0, label='pred_cmd')
+            axes[i%(batch_size/2), i/(batch_size/2)].plot(a_seq[:, 1]*2, 'b', linewidth=1.0, label='ang_v(x2)')
+            axes[i%(batch_size/2), i/(batch_size/2)].plot(demo_pos, 'c', linewidth=1.0, label='demo pos')
+            axes[i%(batch_size/2), i/(batch_size/2)].plot(att_pos[i, :], 'm--', linewidth=1.0, label='attention pos')
+            if i == 0:
+                leg = axes[i%(batch_size/2), i/(batch_size/2)].legend()
+        mng = plt.get_current_fig_manager()
+        mng.frame.Maximize(True)
+        # plt.show()
+        fig_name = os.path.join(model_dir, 'batch_{:d}_result.png'.format(batch_id))
+        plt.savefig(fig_name)
+        plt.clf()
 
 def online_testing(sess, model):
     pass
@@ -256,7 +262,9 @@ def main():
                                                  learning_rate=flags.learning_rate,
                                                  gpu_num=flags.gpu_num,
                                                  test=flags.online_test,
-                                                 demo_mode=flags.demo_mode)
+                                                 demo_mode=flags.demo_mode,
+                                                 post_att_model=flags.post_att_model,
+                                                 inputs_num=flags.inputs_num)
         if flags.online_test:
             online_testing(sess, model)
         elif flags.offline_test:

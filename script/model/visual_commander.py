@@ -26,7 +26,9 @@ class visual_commander(object):
                  learning_rate,
                  gpu_num,
                  test,
-                 demo_mode):
+                 demo_mode,
+                 post_att_model,
+                 inputs_num):
         self.sess = sess
         self.batch_size = batch_size
         self.max_step = max_step
@@ -42,6 +44,8 @@ class visual_commander(object):
         self.gpu_num = gpu_num
         self.test = test
         self.demo_mode = demo_mode
+        self.post_att_model = post_att_model
+        self.inputs_num = inputs_num
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             self.input_demo_img = tf.placeholder(tf.float32, shape=[None, max_n_demo] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
@@ -117,23 +121,37 @@ class visual_commander(object):
             att_pos = None
         elif self.demo_mode == 'hard':
             demo_dense_seq, att_pos = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, False)
-        # all inputs
-        all_inputs = tf.concat([demo_dense_seq, img_vect], axis=1) # b*l, n_hidden+dim_img_feat
-        inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b, n_hidden
-
-        # rnn
-        rnn_input = tf.reshape(inputs_dense, [-1, self.max_step, self.n_hidden])
+        elif self.demo_mode == 'semi':
+            demo_dense_seq, att_pos = self.process_demo_semi_att(input_demo_img, input_demo_cmd, img_vect, False)
         
-        rnn_output, _ = tf.nn.dynamic_rnn(self.rnn_cell, 
-                                          rnn_input, 
-                                          sequence_length=seq_len,
-                                          dtype=tf.float32) # b, l, n_hidden
-        rnn_output = tf.reshape(rnn_output, [-1, self.n_hidden]) # b*l, n_hidden
-        logits = model_utils.dense_layer(rnn_output, self.n_cmd_type, scope='logits', activation=None) # b*l, n_cmd_type
+        # post-attention inputs
+        if self.inputs_num <= 2:
+            all_inputs = demo_dense_seq
+        if self.inputs_num == 3:
+            all_inputs = tf.concat([demo_dense_seq, img_vect], axis=1) # b*l, n_hidden+dim_img_feat
+        elif self.inputs_num == 5:
+            all_inputs = tf.concat([demo_dense_seq, img_vect, prev_cmd_vect, prev_a_vect], axis=1) # b*l, n_hidden+dim_img_feat+dim_emb*2
+        inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b*l, n_hidden
 
-        if self.demo_mode == 'hard':
-            # attention position
-            att_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.int64) # b, l
+        # post-attention model
+        if self.post_att_model == 'gru':
+            print 'post attention model: gru'  
+            # rnn
+            rnn_input = tf.reshape(inputs_dense, [-1, self.max_step, self.n_hidden])
+            rnn_output, _ = tf.nn.dynamic_rnn(self.rnn_cell, 
+                                              rnn_input, 
+                                              sequence_length=seq_len,
+                                              dtype=tf.float32) # b, l, n_hidden
+            rnn_output = tf.reshape(rnn_output, [-1, self.n_hidden]) # b*l, n_hidden
+            logits = model_utils.dense_layer(rnn_output, self.n_cmd_type, scope='logits', activation=None) # b*l, n_cmd_type
+        elif self.post_att_model == 'dense':
+            print 'post attention model: dense'
+            dense = model_utils.dense_layer(inputs_dense, self.n_hidden/2, scope='dense_1') # b*l, n_hidden/2
+            logits = model_utils.dense_layer(dense, self.n_cmd_type, scope='logits', activation=None) # b*l, n_cmd_type
+
+        # attention position
+        if self.demo_mode in ['hard', 'semi']:
+            att_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=att_pos.dtype) # b, l
             att_pos = tf.reshape(att_pos, [-1, self.max_step]) * att_mask 
 
         # predict
@@ -162,73 +180,25 @@ class visual_commander(object):
             _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
         elif self.demo_mode == 'hard':
             demo_dense, att_pos = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, True)
+        elif self.demo_mode == 'semi':
+            demo_dense, att_pos = self.process_demo_semi_att(input_demo_img, input_demo_cmd, img_vect, True)
 
-        all_inputs = tf.concat([demo_dense, img_vect], axis=1) # b, n_hidden+dim_img_feat
+        if self.inputs_num == 2:
+            all_inputs = tf.concat([demo_dense, img_vect], axis=1) # b, n_hidden+dim_img_feat
+        elif self.inputs_num == 4:
+            all_inputs = tf.concat([demo_dense, img_vect, prev_cmd_vect, prev_a_vect], axis=1) # b, n_hidden+dim_img_feat+dim_emb*2
         inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b, n_hidden
-        rnn_output, rnn_h_out = rnn_cell(inputs_dense, rnn_h_in) # b, n_hidden | b, n_hidden
-        logits = model_utils.dense_layer(rnn_output, self.n_cmd_type, scope='logits', activation=None) # b, n_cmd_type
+        
+        if self.post_att_model == 'gru':
+            rnn_output, rnn_h_out = rnn_cell(inputs_dense, rnn_h_in) # b, n_hidden | b, n_hidden
+            logits = model_utils.dense_layer(rnn_output, self.n_cmd_type, scope='logits', activation=None) # b, n_cmd_type
+        elif self.post_att_model == 'dense':
+            dense = model_utils.dense_layer(inputs_dense, self.n_hidden/2, scope='dense_1') # b, n_hidden/2
+            logits = model_utils.dense_layer(dense, self.n_cmd_type, scope='logits', activation=None) # b, n_cmd_type
+            rnn_h_out = rnn_h_in
+
         predict = tf.argmax(logits, axis=1) # b
 
-        return predict, rnn_h_out
-
-    def training_model_simple(self, inputs):
-        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len = inputs
-
-        # process observation
-        input_img = tf.reshape(input_img, [-1]+self.dim_img) # b*l, dim_img
-        img_vect = self.encode_image(input_img) # b*l, dim_img_feat
-
-        # process demo
-        if self.demo_mode == 'sum':
-            demo_dense_seq, _ = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b*l, n_hidden
-            att_pos = None
-        elif self.demo_mode == 'hard':
-            demo_dense_seq, att_pos = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, False)
-        # all inputs
-        all_inputs = tf.concat([demo_dense_seq, img_vect], axis=1) # b*l, n_hidden+dim_img_feat
-        inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b*l, n_hidden
-        dense_1 = model_utils.dense_layer(inputs_dense, self.n_hidden/2, scope='dense_1') # b*l, n_hidden/2
-        logits = model_utils.dense_layer(dense_1, self.n_cmd_type, scope='logits', activation=None) # b*l, n_cmd_type
-
-        if self.demo_mode == 'hard':
-            # attention position
-            att_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.int64) # b, l
-            att_pos = tf.reshape(att_pos, [-1, self.max_step]) * att_mask 
-
-        # predict
-        pred_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.int32) # b, l
-        pred = tf.argmax(tf.reshape(logits, [-1, self.max_step, self.n_cmd_type]), axis=2,
-                         output_type=tf.int32) * pred_mask # b, l
-
-        # loss
-        label_cmd = tf.reshape(label_cmd, [-1]) # b*l
-        loss_mask = tf.reshape(tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.float32), [-1]) # b*l
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label_cmd, logits=logits) * loss_mask # b*l
-
-        return loss, pred, att_pos
-
-    def testing_model_simple(self, inputs):
-        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, rnn_h_in, demo_len = inputs
-        # process observation
-        input_img = tf.reshape(input_img, [-1]+self.dim_img) # b, dim_img
-        img_vect = self.encode_image(input_img) # b, dim_img_feat
-        prev_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_prev_cmd), [-1, self.dim_emb]) # b, dim_emb
-        input_prev_action = tf.reshape(input_prev_action, [-1, self.dim_a]) # b, dim_a
-        prev_a_vect = model_utils.dense_layer(input_prev_action, self.dim_emb, scope='a_embedding', activation=None) # b, dim_emb
-
-        # process demo
-        if self.demo_mode == 'sum':
-            _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
-        elif self.demo_mode == 'hard':
-            demo_dense, _ = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, True)
-
-        all_inputs = tf.concat([demo_dense, img_vect, prev_cmd_vect, prev_a_vect], axis=1) # b, n_hidden+dim_img_feat+dim_emb*2    
-        inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b, n_hidden
-        dense_1 = model_utils.dense_layer(inputs_dense, self.n_hidden/2, scope='dense_1') # b, n_hidden/2
-        logits = model_utils.dense_layer(dense_1, self.n_cmd_type, scope='logits', activation=None) # b, n_cmd_type
-        predict = tf.argmax(logits, axis=1) # b
-
-        rnn_h_out = rnn_h_in
         return predict, rnn_h_out
 
 
@@ -243,6 +213,7 @@ class visual_commander(object):
         return outputs
 
     def process_demo_sum(self, input_demo_img, input_demo_cmd, demo_len):
+        print 'attention mode: sum'
         # process demo
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
         demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
@@ -262,6 +233,7 @@ class visual_commander(object):
         return demo_dense_seq, demo_dense
 
     def process_demo_hard_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag):
+        print 'attention mode: hard'
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
         demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
         shape = demo_img_vect.get_shape().as_list()
@@ -283,11 +255,52 @@ class visual_commander(object):
             demo_cmd_vect = tf.reshape(demo_cmd_vect, [-1, self.max_n_demo, self.dim_emb]) # b*l, n, dim_emb
         attended_demo_cmd_vect = tf.gather_nd(demo_img_vect, coords) # b*l, dim_emb
 
-        demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
+        if self.inputs_num == 1:
+            demo_vect = attended_demo_cmd_vect # b*l, dim_emb
+        else:
+            demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
         demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
 
         return demo_dense, att_pos
 
+    def process_demo_semi_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag):
+        print 'attention mode: semi-hard'
+        input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
+        demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
+        shape = demo_img_vect.get_shape().as_list()
+        demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b, n, dim_img_feat
+        if not test_flag:
+            demo_img_vect = tf.tile(tf.expand_dims(demo_img_vect, axis=1), [1, self.max_step, 1, 1]) # b, l, n, dim_img_feat
+            demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b*l, n, dim_img_feat
+        img_vect = tf.tile(tf.expand_dims(img_vect, axis=1), [1, self.max_n_demo, 1]) # b*l, n, dim_img_feat
+        l2_norm = tf.norm(demo_img_vect - img_vect, axis=2) # b*l, n
+        inverse_l2_norm = 1./l2_norm # b*l, n
+        # soft-argmax
+        beta = 10.
+        batch_size = tf.shape(img_vect)[0]/self.max_step
+        indicies = tf.tile(tf.expand_dims(tf.range(self.max_n_demo, dtype=tf.float32), axis=1), 
+                           [batch_size*self.max_step, 1]) # b*l, n
+        a = tf.exp(inverse_l2_norm) # b*l, n
+        b = tf.tile(tf.reduce_sum(tf.exp(inverse_l2_norm), axis=1, keepdims=True), [1, self.max_n_demo]) # b*l, n
+        expect = tf.reduce_sum(a/b, axis=1) # b*l
+        att_pos = tf.round(expect)
+
+        coords = tf.stack([tf.range(batch_size*self.max_step), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
+        attended_demo_img_vect = tf.gather_nd(demo_img_vect, coords) # b*l,  dim_img_feat 
+
+        demo_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_demo_cmd), [-1, self.max_n_demo, self.dim_emb]) # b, n, dim_emb
+        if not test_flag:
+            demo_cmd_vect = tf.tile(tf.expand_dims(demo_cmd_vect, axis=1), [1, self.max_step, 1, 1]) # b, l, n, dim_emb
+            demo_cmd_vect = tf.reshape(demo_cmd_vect, [-1, self.max_n_demo, self.dim_emb]) # b*l, n, dim_emb
+        attended_demo_cmd_vect = tf.gather_nd(demo_img_vect, coords) # b*l, dim_emb
+
+        if self.inputs_num == 1:
+            demo_vect = attended_demo_cmd_vect # b*l, dim_emb
+        else:
+            demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
+        demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
+
+        return demo_dense, att_pos
 
     def train(self, data):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
