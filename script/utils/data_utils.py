@@ -197,6 +197,7 @@ def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
     mem = 0.
     data = []
     nums = []
+    img_sum = np.zeros([img_size[0], img_size[1], 3])
     file_path_number_list = []
     file_list = os.listdir(data_path)
     print('Loading from '+data_path)
@@ -244,6 +245,7 @@ def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
     print('Load {} seqs into memory with {:.1f}Mb in {:.1f}s '.format(len(data), 
                                                                       get_size(data)/(1024.**2), 
                                                                       time.time() - start_time))
+
     return data
 
 def moving_average(x, window_len):
@@ -478,6 +480,48 @@ def batch_visualise(batch_data):
             # plt.show()
             # plt.show(block=False)
 
+def image_mean_and_variance(data_path, max_step, img_size, max_data_len=None):
+    start_time = time.time()
+    mem = 0.
+    data = []
+    nums = []
+    img_sum = np.zeros([img_size[0], img_size[1], 3])
+    file_path_number_list = []
+    file_list = os.listdir(data_path)
+    print('Loading from '+data_path)
+    for file_name in file_list:
+        if 'flow' in file_name:
+            nums.append(int(file_name[:file_name.find('_')]))
+    nums = np.sort(nums).tolist()
+    for num in nums:
+        file_path_number_list.append(data_path+'/'+str(num))
+    print('Found {} sequences!!'.format(len(file_path_number_list)))
+    bar = progressbar.ProgressBar(maxval=len(file_path_number_list), \
+                                  widgets=[progressbar.Bar('=', '[', ']'), ' ', 
+                                           progressbar.Percentage()])
+    if max_data_len is not None:
+        file_path_number_list = file_path_number_list[:max_data_len]
+    for file_id, file_path_number in enumerate(file_path_number_list):
+        # img sequence
+        img_seq_path = file_path_number + '_image'
+        img_file_list = os.listdir(img_seq_path)
+        img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
+        if len(img_file_list) > max_step:
+            img_file_list = img_file_list[:max_step]
+        img_list = []
+        for img_file_name in img_file_list:
+            img_file_path = os.path.join(img_seq_path, img_file_name)
+            img, origin_img_dim = read_img_file(img_file_path, img_size)
+            img_list.append(img)
+
+        bar.update(file_id)
+    bar.finish()
+    img_seq = np.stack(img_list, axis=0)
+    mean = np.mean(img_seq, axis=(0, 1, 2))
+    std = np.std(img_seq, axis=(0, 1, 2))
+    print(mean, std)
+    print('time used: {:.1f} (min)'.format((time.time()-start_time)/60.)) 
+
 if __name__ == '__main__':
     # data_path = sys.argv[1]
     # sub_data_folder = sys.argv[2]
@@ -486,8 +530,8 @@ if __name__ == '__main__':
     # meta_file_path = sys.argv[3]
     # print('meta_file_path: ', meta_file_path)
 
-    sub_data_path = '/mnt/Work/catkin_ws/data/vpf_data/mini'
-    meta_file_path = '/mnt/Work/catkin_ws/data/vpf_data/meta'
+    sub_data_path = '/home/linhai/Work/catkin_ws/data/vpf_data/axe'
+    meta_file_path = '/home/linhai/mnt/Work/catkin_ws/data/vpf_data/meta'
 
 
     batch_size = 8
@@ -503,7 +547,7 @@ if __name__ == '__main__':
 
     # write_multiple_meta_files(data_path_list, meta_file_path, max_file_num, max_step, img_size)
 
-    data = read_data_to_mem(sub_data_path, max_step, img_size)
-    batch_data = get_a_batch(data, 0, batch_size*16, max_step, img_size, max_n_demo)
-
+    # data = read_data_to_mem(sub_data_path, max_step, img_size)
+    # batch_data = get_a_batch(data, 0, batch_size*16, max_step, img_size, max_n_demo)
+    image_mean_and_variance(sub_data_path, max_step, img_size)
             
