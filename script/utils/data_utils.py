@@ -262,13 +262,21 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
     batch_prev_cmd_seq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
     batch_cmd_seq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
     batch_a_seq = np.zeros([batch_size, max_step, 2], dtype=np.float32)
+    batch_att_pos = np.zeros([batch_size, max_step, 1], dtype=np.int64)
     batch_demo_indicies = [[] for i in xrange(batch_size)]
     batch_demo_len = np.zeros([batch_size], dtype=np.int32)
     batch_seq_len = np.zeros([batch_size], dtype=np.int32)
     for i in xrange(batch_size):
         idx = start + i
         flow_seq = data[idx][1] # l, 1
-        img_seq = data[idx][0].astype(np.float32)/255. # l, h, w, c
+        img_seq = data[idx][0].astype(np.float32) # l, h, w, c
+        img_seq[:, :, :, 0] -= 75.81717218
+        img_seq[:, :, :, 0] /= 42.55792425
+        img_seq[:, :, :, 1] -= 61.19639863
+        img_seq[:, :, :, 1] /= 43.39973921
+        img_seq[:, :, :, 2] -= 49.70393136
+        img_seq[:, :, :, 2] /= 47.69464972
+
         action_seq = data[idx][2] # l, 2
         # img_seq
         batch_img_seq[i, :len(img_seq), :, :, :] = img_seq
@@ -326,7 +334,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
 
         # # plot
         # plt.figure(1)
-        # plt.plot(flow_seq, 'r', 
+        # plt.plot(action_seq[:, 1], 'r', 
         #          smoothed_flow_seq, 'g', 
         #          lagged_cmd_seq, 'b',
         #          cmd_seq, 'k',
@@ -530,8 +538,8 @@ if __name__ == '__main__':
     # meta_file_path = sys.argv[3]
     # print('meta_file_path: ', meta_file_path)
 
-    sub_data_path = '/home/linhai/Work/catkin_ws/data/vpf_data/axe'
-    meta_file_path = '/home/linhai/mnt/Work/catkin_ws/data/vpf_data/meta'
+    sub_data_path = '/mnt/Work/catkin_ws/data/vpf_data/mini'
+    meta_file_path = '/mnt/mnt/Work/catkin_ws/data/vpf_data/meta'
 
 
     batch_size = 8
@@ -547,7 +555,7 @@ if __name__ == '__main__':
 
     # write_multiple_meta_files(data_path_list, meta_file_path, max_file_num, max_step, img_size)
 
-    # data = read_data_to_mem(sub_data_path, max_step, img_size)
-    # batch_data = get_a_batch(data, 0, batch_size*16, max_step, img_size, max_n_demo)
-    image_mean_and_variance(sub_data_path, max_step, img_size)
+    data = read_data_to_mem(sub_data_path, max_step, img_size, batch_size)
+    batch_data = get_a_batch(data, 0, batch_size, max_step, img_size, max_n_demo)
+    # image_mean_and_variance(sub_data_path, max_step, img_size)
             

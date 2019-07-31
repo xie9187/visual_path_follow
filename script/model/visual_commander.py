@@ -10,6 +10,9 @@ def reduce_sum(input_var, axis=None):
     else:
         return tf.reduce_sum(input_var, axis)
 
+def safe_norm(x, epsilon=1e-12, axis=None):
+    return tf.sqrt(tf.reduce_sum(x ** 2, axis=axis) + epsilon)
+
 class visual_commander(object):
     def __init__(self,
                  sess,
@@ -28,7 +31,9 @@ class visual_commander(object):
                  test,
                  demo_mode,
                  post_att_model,
-                 inputs_num):
+                 inputs_num,
+                 keep_prob,
+                 loss_rate):
         self.sess = sess
         self.batch_size = batch_size
         self.max_step = max_step
@@ -46,6 +51,8 @@ class visual_commander(object):
         self.demo_mode = demo_mode
         self.post_att_model = post_att_model
         self.inputs_num = inputs_num
+        self.keep_prob = keep_prob
+        self.loss_rate = loss_rate
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             self.input_demo_img = tf.placeholder(tf.float32, shape=[None, max_n_demo] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
@@ -71,12 +78,9 @@ class visual_commander(object):
                           self.demo_len, 
                           self.seq_len]
                 # loss, self.prob = self.multi_gpu_model(inputs)
-                loss, self.batch_pred, self.batch_att_pos = self.training_model(inputs)
-                self.loss = reduce_sum(loss)/tf.cast(reduce_sum(self.seq_len), tf.float32)
+                self.accuracy, cmd_loss, att_loss, self.batch_pred, self.batch_att_pos = self.training_model(inputs)
+                self.loss = cmd_loss
                 self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
-                
-                correct_pred = tf.equal(self.batch_pred, tf.reshape(self.label_cmd, [-1, max_step]))
-                self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
             else:
                 inputs = [self.input_demo_img, self.input_demo_cmd, self.input_img, self.input_prev_cmd, self.rnn_h_in, self.demo_len]
                 self.predict, self.rnn_h_out = self.testing_model_simple(inputs)
@@ -120,11 +124,17 @@ class visual_commander(object):
             demo_dense_seq, _ = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b*l, n_hidden
             att_pos = None
         elif self.demo_mode == 'hard':
-            demo_dense_seq, att_pos = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, False)
-        elif self.demo_mode == 'semi':
-            demo_dense_seq, att_pos = self.process_demo_semi_att(input_demo_img, input_demo_cmd, img_vect, False)
+            demo_dense_seq, att_pos, l2_norm = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, False)
+        # elif self.demo_mode == 'semi':
+        #     demo_dense_seq, att_pos = self.process_demo_semi_att(input_demo_img, input_demo_cmd, img_vect, False)
         
         # post-attention inputs
+        # dropouts
+        demo_dense_seq = tf.nn.dropout(demo_dense_seq, keep_prob=self.keep_prob)
+        img_vect = tf.nn.dropout(img_vect, keep_prob=self.keep_prob)
+        prev_cmd_vect = tf.nn.dropout(prev_cmd_vect, keep_prob=self.keep_prob)
+        prev_a_vect = tf.nn.dropout(prev_a_vect, keep_prob=self.keep_prob)
+
         if self.inputs_num <= 2:
             all_inputs = demo_dense_seq
         if self.inputs_num == 3:
@@ -159,12 +169,29 @@ class visual_commander(object):
         pred = tf.argmax(tf.reshape(logits, [-1, self.max_step, self.n_cmd_type]), axis=2,
                          output_type=tf.int32) * pred_mask # b, l
 
-        # loss
+        # cmd_loss
         label_cmd = tf.reshape(label_cmd, [-1]) # b*l
         loss_mask = tf.reshape(tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.float32), [-1]) # b*l
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label_cmd, logits=logits) * loss_mask # b*l
+        cmd_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label_cmd, logits=logits) * loss_mask # b*l
+        cmd_loss = tf.reduce_sum(cmd_loss)/tf.cast(tf.reduce_sum(seq_len), tf.float32)
 
-        return loss, pred, att_pos
+        # accuracy
+        correct_pred = tf.equal(pred, tf.reshape(label_cmd, [-1, self.max_step])) # b, l
+        batch_correct_num = tf.reduce_sum(tf.cast(correct_pred, tf.int32), axis=1) # b
+        batch_accuracy = tf.cast((batch_correct_num - tf.reduce_sum(1-pred_mask, axis=1)), tf.float32)/tf.cast(tf.reduce_sum(pred_mask, axis=1), tf.float32) # b
+        all_correct_num = tf.reduce_sum(tf.cast(correct_pred, tf.int32)) # scalar
+        all_accuracy = tf.cast((all_correct_num - tf.reduce_sum(1-pred_mask)), tf.float32)/tf.cast(tf.reduce_sum(pred_mask), tf.float32)
+
+        # reinforce
+        logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
+        sample_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=tf.reshape(att_pos, [-1])) * loss_mask # b*l
+        sample_loss = tf.reduce_sum(sample_loss)/tf.reduce_sum(loss_mask)
+        reward_estimate = model_utils.reward_estimate(all_inputs, all_accuracy) * loss_mask # b*l
+        select_loss = sample_loss * tf.stop_gradient(reward_estimate) # b*l
+        select_loss = tf.reduce_sum(select_loss/tf.reduce_sum(loss_mask)) # scalar
+        baseline_loss = tf.reduce_sum(tf.square(reward_estimate))/tf.reduce_sum(loss_mask)
+        att_loss = select_loss + baseline_loss
+        return all_accuracy, cmd_loss, att_loss, pred, att_pos
 
     def testing_model(self, inputs):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, rnn_h_in, demo_len = inputs
@@ -179,7 +206,7 @@ class visual_commander(object):
         if self.demo_mode == 'sum':
             _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
         elif self.demo_mode == 'hard':
-            demo_dense, att_pos = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, True)
+            demo_dense, att_pos, l2_norm = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, True)
         elif self.demo_mode == 'semi':
             demo_dense, att_pos = self.process_demo_semi_att(input_demo_img, input_demo_cmd, img_vect, True)
 
@@ -244,7 +271,9 @@ class visual_commander(object):
             demo_img_vect = tf.tile(tf.expand_dims(demo_img_vect, axis=1), [1, self.max_step, 1, 1]) # b, l, n, dim_img_feat
             demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b*l, n, dim_img_feat
         img_vect = tf.tile(tf.expand_dims(img_vect, axis=1), [1, self.max_n_demo, 1]) # b*l, n, dim_img_feat
-        l2_norm = tf.norm(demo_img_vect - img_vect, axis=2)  # b*l, n
+        l2_norm = safe_norm(demo_img_vect - img_vect, axis=2)  # b*l, n
+        # cos_sim = tf.reduce_sum(demo_img_vect*img_vect, axis=2) # b*l, n
+        self.l2_norm = tf.reshape(l2_norm, [-1, self.max_step, self.max_n_demo])
         att_pos = tf.argmax(tf.math.softmax(-l2_norm), axis=1) # b*l
 
         batch_size = tf.shape(img_vect)[0]/self.max_step
@@ -263,7 +292,7 @@ class visual_commander(object):
             demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
         demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
 
-        return demo_dense, att_pos
+        return demo_dense, att_pos, l2_norm
 
     def process_demo_semi_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag):
         print 'attention mode: semi-hard'
@@ -276,6 +305,7 @@ class visual_commander(object):
             demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b*l, n, dim_img_feat
         img_vect = tf.tile(tf.expand_dims(img_vect, axis=1), [1, self.max_n_demo, 1]) # b*l, n, dim_img_feat
         l2_norm = tf.norm(demo_img_vect - img_vect, axis=2) # b*l, n
+        self.l2_norm = tf.reshape(l2_norm, [-1, self.max_step, self.max_n_demo])
         inverse_l2_norm = 1./l2_norm # b*l, n
         # soft-argmax
         beta = 10.
@@ -326,7 +356,7 @@ class visual_commander(object):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
         if not self.test:
             rnn_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)
-            return self.sess.run([self.accuracy, self.loss, self.batch_pred, self.batch_att_pos], feed_dict={
+            return self.sess.run([self.accuracy, self.loss, self.batch_pred, self.batch_att_pos, self.l2_norm], feed_dict={
                 self.input_demo_img: input_demo_img,
                 self.input_demo_cmd: input_demo_cmd,
                 self.input_img: input_img,

@@ -42,7 +42,8 @@ flag.DEFINE_integer('gpu_num', 1, 'number of gpu')
 flag.DEFINE_string('demo_mode', 'hard', 'the mode of process guidance (hard, sum)')
 flag.DEFINE_string('post_att_model', 'gru', 'the model to use after attention (gru, dense, none)')
 flag.DEFINE_integer('inputs_num', 3, 'how many kinds of inputs used (2, 4)')
-
+flag.DEFINE_float('keep_prob', 0.8, 'keep probability of drop out')
+flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
 # training param
 flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
                     'Data directory')
@@ -87,7 +88,7 @@ def training(sess, model):
         #     model_utils.variable_summaries(v)
 
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
-    saver = tf.train.Saver(max_to_keep=5)
+    saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
 
     train_loss_ph = tf.placeholder(tf.float32, [], name='train_loss_ph')
     test_loss_ph = tf.placeholder(tf.float32, [], name='test_loss_ph')
@@ -130,7 +131,6 @@ def training(sess, model):
             acc, loss, _ = model.train(batch_data)
             opt_time_temp = time.time()-opt_start_time
             opt_time.append(time.time()-opt_start_time)
-
             # print 'sample: {:.3f}s, opt: {:.3f}s'.format(sample_time, opt_time_temp)
 
             loss_list.append(loss)
@@ -148,7 +148,7 @@ def training(sess, model):
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = data_utils.get_a_batch(valid_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
-            acc, loss, _, _ = model.valid(batch_data)
+            acc, loss, _, _, _ = model.valid(batch_data)
 
             loss_list.append(loss)
             acc_list.append(acc)
@@ -206,10 +206,13 @@ def offline_testing(sess, model):
     plt.switch_backend('wxAgg') 
     
     for batch_id in xrange(len(data)/batch_size):
+        print 'batch: ', batch_id
         fig, axes = plt.subplots(batch_size/2, 2, sharex=True, figsize=(8,12))
         batch_data = data_utils.get_a_batch(data, batch_id*batch_size, batch_size, max_step, img_size, max_n_demo)
-        acc, loss, pred_cmd, att_pos = model.valid(batch_data)
+        acc, loss, pred_cmd, att_pos, l2_norm = model.valid(batch_data)
         for i in xrange(batch_size):
+            print 'sample: ', i
+            print 'l2_norm: ', l2_norm[i]
             demo_img_seq = batch_data[0][i, :, :, :]
             demo_cmd_seq = batch_data[1][i, :]
             img_seq = batch_data[2][i, :, :, :]
@@ -234,6 +237,7 @@ def offline_testing(sess, model):
             axes[i%(batch_size/2), i/(batch_size/2)].plot(att_pos[i, :], 'm--', linewidth=1.0, label='attention pos')
             if i == 0:
                 leg = axes[i%(batch_size/2), i/(batch_size/2)].legend()
+
         mng = plt.get_current_fig_manager()
         mng.frame.Maximize(True)
         # plt.show()
@@ -264,7 +268,9 @@ def main():
                                                  test=flags.online_test,
                                                  demo_mode=flags.demo_mode,
                                                  post_att_model=flags.post_att_model,
-                                                 inputs_num=flags.inputs_num)
+                                                 inputs_num=flags.inputs_num,
+                                                 keep_prob=flags.keep_prob,
+                                                 loss_rate=flags.loss_rate)
         if flags.online_test:
             online_testing(sess, model)
         elif flags.offline_test:
