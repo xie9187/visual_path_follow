@@ -77,9 +77,9 @@ class visual_commander(object):
                           self.label_cmd, 
                           self.demo_len, 
                           self.seq_len]
-                # loss, self.prob = self.multi_gpu_model(inputs)
-                self.accuracy, cmd_loss, att_loss, self.batch_pred, self.batch_att_pos = self.training_model(inputs)
-                self.loss = cmd_loss
+                gpu_accuracy, gpu_cmd_loss, gpu_att_loss, self.batch_pred, self.batch_att_pos = self.multi_gpu_model(inputs)
+                self.accuracy = tf.reduce_mean(gpu_accuracy)
+                self.loss = tf.reduce_mean(gpu_cmd_loss) + tf.reduce_mean(gpu_att_loss) * self.loss_rate
                 self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
             else:
                 inputs = [self.input_demo_img, self.input_demo_cmd, self.input_img, self.input_prev_cmd, self.rnn_h_in, self.demo_len]
@@ -90,7 +90,7 @@ class visual_commander(object):
     def multi_gpu_model(self, inputs):
         # build model with multi-gpu parallely
         splited_inputs_list = []
-        splited_outputs_list = [[], []]
+        splited_outputs_list = [[], [], [], [], []]
         for var in inputs:
             splited_inputs_list.append(tf.split(var, self.gpu_num, axis=0))
         for i in range(self.gpu_num):
@@ -191,7 +191,7 @@ class visual_commander(object):
         select_loss = tf.reduce_sum(select_loss/tf.reduce_sum(loss_mask)) # scalar
         baseline_loss = tf.reduce_sum(tf.square(reward_estimate))/tf.reduce_sum(loss_mask)
         att_loss = select_loss + baseline_loss
-        return all_accuracy, cmd_loss, att_loss, pred, att_pos
+        return [all_accuracy, cmd_loss, att_loss, pred, att_pos]
 
     def testing_model(self, inputs):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, rnn_h_in, demo_len = inputs
@@ -337,7 +337,7 @@ class visual_commander(object):
     def train(self, data):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
         if not self.test:
-            rnn_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)
+            rnn_h_in = np.zeros([self.batch_size/self.gpu_num, self.n_hidden], np.float32)
             return self.sess.run([self.accuracy, self.loss, self.opt], feed_dict={
                 self.input_demo_img: input_demo_img,
                 self.input_demo_cmd: input_demo_cmd,
@@ -355,7 +355,7 @@ class visual_commander(object):
     def valid(self, data):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
         if not self.test:
-            rnn_h_in = np.zeros([self.batch_size, self.n_hidden], np.float32)
+            rnn_h_in = np.zeros([self.batch_size/self.gpu_num, self.n_hidden], np.float32)
             return self.sess.run([self.accuracy, self.loss, self.batch_pred, self.batch_att_pos, self.l2_norm], feed_dict={
                 self.input_demo_img: input_demo_img,
                 self.input_demo_cmd: input_demo_cmd,
