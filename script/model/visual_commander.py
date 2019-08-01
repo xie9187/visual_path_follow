@@ -104,7 +104,7 @@ class visual_commander(object):
         outputs = []
         print splited_outputs_list
         for splited_output_list in splited_outputs_list:
-            shape = tf.get_shape(splited_output_list[0]).tolist()
+            shape = splited_output_list[0].get_shape().as_list()
             print shape
             combiend_output = tf.concat(splited_output_list, axis=0)
             outputs.append(combiend_output)
