@@ -102,6 +102,7 @@ class visual_commander(object):
                 for idx, splited_output in enumerate(outputs_per_gpu):
                     splited_outputs_list[idx].append(splited_output)
         outputs = []
+        print splited_outputs_list
         for splited_output_list in splited_outputs_list:
             combiend_output = tf.concat(splited_output_list, axis=0)
             outputs.append(combiend_output)
@@ -130,10 +131,10 @@ class visual_commander(object):
         
         # post-attention inputs
         # dropouts
-        demo_dense_seq = tf.nn.dropout(demo_dense_seq, keep_prob=self.keep_prob)
-        img_vect = tf.nn.dropout(img_vect, keep_prob=self.keep_prob)
-        prev_cmd_vect = tf.nn.dropout(prev_cmd_vect, keep_prob=self.keep_prob)
-        prev_a_vect = tf.nn.dropout(prev_a_vect, keep_prob=self.keep_prob)
+        demo_dense_seq = tf.nn.dropout(demo_dense_seq, rate=1.-self.keep_prob)
+        img_vect = tf.nn.dropout(img_vect, rate=1.-self.keep_prob)
+        prev_cmd_vect = tf.nn.dropout(prev_cmd_vect, rate=1.-self.keep_prob)
+        prev_a_vect = tf.nn.dropout(prev_a_vect, rate=1.-self.keep_prob)
 
         if self.inputs_num <= 2:
             all_inputs = demo_dense_seq
@@ -193,6 +194,7 @@ class visual_commander(object):
         select_loss = tf.reduce_sum(select_loss/tf.reduce_sum(loss_mask)) # scalar
         baseline_loss = tf.reduce_sum(tf.square(reward_estimate))/tf.reduce_sum(loss_mask)
         att_loss = select_loss + baseline_loss
+
         return [all_accuracy, cmd_loss, att_loss, pred, att_pos]
 
     def testing_model(self, inputs):
