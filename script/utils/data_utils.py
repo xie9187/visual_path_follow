@@ -256,8 +256,10 @@ def moving_average(x, window_len):
     
 def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, lag=20):
     start_time = time.time()
-    batch_demo_img_seq = np.zeros([batch_size, max_demo_len, img_size[0], img_size[1], 3], dtype=np.float32)
-    batch_demo_cmd_seq = np.zeros([batch_size, max_demo_len, 1], dtype=np.int32)
+    # the padded demo image must be far from data images
+    batch_demo_img_seq = np.ones([batch_size, max_demo_len, img_size[0], img_size[1], 3], dtype=np.float32) * (-1)
+    # the padded demo command is "go forward"
+    batch_demo_cmd_seq = np.ones([batch_size, max_demo_len, 1], dtype=np.int32) * 2
     batch_img_seq = np.zeros([batch_size, max_step, img_size[0], img_size[1], 3], dtype=np.float32)
     batch_prev_cmd_seq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
     batch_cmd_seq = np.zeros([batch_size, max_step, 1], dtype=np.int32)
@@ -325,9 +327,6 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
             batch_demo_img_seq[i, n, :, :, :] = img_seq[demo_idx, :, :, :]
             batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[demo_idx, :]
             n += 1
-        # batch_demo_indicies[i].append(len(flow_seq)-1)
-        # batch_demo_img_seq[i, n, :, :, :] = img_seq[len(flow_seq)-1, :, :, :]
-        # batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[len(flow_seq)-1, :]
 
         batch_demo_len[i] = len(batch_demo_indicies[i])
         batch_seq_len[i] = len(flow_seq)
@@ -434,14 +433,15 @@ def write_csv(data, file_path):
         if not isinstance(row, list):
             row = [row]
         writer.writerow(row)
+
 def save_file(file_name, data):
     file = open(file_name, 'w')
     writer = csv.writer(file, delimiter=',')
     for idx, row in enumerate(data):
-        print('save {:}/{:} \r'.format(idx, len(data)), end="\r")
+        # print('save {:}/{:} \r'.format(idx, len(data)), end="\r")
         sys.stdout.flush() 
-        if not isinstance(row, list):
-            row = [row]
+        # if not isinstance(row, list):
+        #     row = [row]
         writer.writerow(row)
     file.close()
 

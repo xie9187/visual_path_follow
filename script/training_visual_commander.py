@@ -194,7 +194,7 @@ def offline_testing(sess, model):
     for idx, v in enumerate(trainable_var):
         print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
 
-    saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
+    saver = tf.train.Saver(trainable_var, max_to_keep=5, save_relative_paths=True)
 
     checkpoint = tf.train.get_checkpoint_state(model_dir)
     if checkpoint and checkpoint.model_checkpoint_path:
@@ -210,9 +210,8 @@ def offline_testing(sess, model):
         fig, axes = plt.subplots(batch_size/2, 2, sharex=True, figsize=(8,12))
         batch_data = data_utils.get_a_batch(data, batch_id*batch_size, batch_size, max_step, img_size, max_n_demo)
         acc, loss, pred_cmd, att_pos, l2_norm = model.valid(batch_data)
+        l2_norm = np.sqrt(l2_norm**2 - 1e-12)
         for i in xrange(batch_size):
-            print 'sample: ', i
-            print 'l2_norm: ', l2_norm[i]
             demo_img_seq = batch_data[0][i, :, :, :]
             demo_cmd_seq = batch_data[1][i, :]
             img_seq = batch_data[2][i, :, :, :]
@@ -244,6 +243,9 @@ def offline_testing(sess, model):
         fig_name = os.path.join(model_dir, 'batch_{:d}_result.png'.format(batch_id))
         plt.savefig(fig_name)
         plt.clf()
+
+        dist_name = os.path.join(model_dir, 'batch_{:d}_norm.csv'.format(batch_id))
+        data_utils.save_file(dist_name, l2_norm)
 
 def online_testing(sess, model):
     pass
