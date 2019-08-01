@@ -104,9 +104,9 @@ class visual_commander(object):
         outputs = []
         for splited_output_list in splited_outputs_list:
             if len(splited_output_list[0].get_shape().as_list()) == 0:
-                for var in splited_output_list:
-                    var = tf.expand_dims(var, axis=0)
-            combiend_output = tf.concat(splited_output_list, axis=0)
+                combiend_output = tf.stack(splited_output_list, axis=0)
+            else:
+                combiend_output = tf.concat(splited_output_list, axis=0)
             outputs.append(combiend_output)
         if len(outputs) == 1:
             outputs = outputs[0]
