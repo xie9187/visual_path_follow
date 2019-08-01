@@ -137,8 +137,10 @@ class visual_commander(object):
 
         if self.inputs_num <= 2:
             all_inputs = demo_dense_seq
-        if self.inputs_num == 3:
+        elif self.inputs_num == 3:
             all_inputs = tf.concat([demo_dense_seq, img_vect], axis=1) # b*l, n_hidden+dim_img_feat
+        elif self.inputs_num == 4:
+            all_inputs = tf.concat([demo_dense_seq, img_vect, prev_cmd_vect], axis=1) # b*l, n_hidden+dim_img_feat
         elif self.inputs_num == 5:
             all_inputs = tf.concat([demo_dense_seq, img_vect, prev_cmd_vect, prev_a_vect], axis=1) # b*l, n_hidden+dim_img_feat+dim_emb*2
         inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b*l, n_hidden
