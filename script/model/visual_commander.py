@@ -281,11 +281,12 @@ class visual_commander(object):
         norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
         self.l2_norm = l2_norm
         att_pos = tf.argmax(tf.math.softmax(-l2_norm), axis=1) # b*l
-        min_norm = tf.reduce_min(l2_norm, axis=1) # b*l
-        norm_threshold = 10.
-        # attend to the first padded demo where the command is always "go forward" when the min dist is blow threshold
-        first_padded_demo_pos = tf.reshape(tf.tile(tf.expand_dims(demo_len, axis=1), [1, self.max_step]), [-1]) # b*1
-        att_pos = tf.where(min_norm > norm_threshold, att_pos, tf.cast(first_padded_demo_pos, att_pos.dtype)) # b*l
+
+        # min_norm = tf.reduce_min(l2_norm, axis=1) # b*l
+        # norm_threshold = 10.
+        # # attend to the first padded demo where the command is always "go forward" when the min dist is blow threshold
+        # first_padded_demo_pos = tf.reshape(tf.tile(tf.expand_dims(demo_len, axis=1), [1, self.max_step]), [-1]) # b*1
+        # att_pos = tf.where(min_norm > norm_threshold, att_pos, tf.cast(first_padded_demo_pos, att_pos.dtype)) # b*l
 
         batch_size = tf.shape(img_vect)[0]/self.max_step
         coords = tf.stack([tf.range(batch_size*self.max_step), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
