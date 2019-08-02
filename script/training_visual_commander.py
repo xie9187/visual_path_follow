@@ -50,7 +50,7 @@ flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/local
 flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('load_model_dir', ' ', 'load model directory.')
 flag.DEFINE_string('model_name', 'vc_demo_sum', 'model name.')
-flag.DEFINE_integer('max_epoch', 40, 'max epochs.')
+flag.DEFINE_integer('max_epoch', 50, 'max epochs.')
 flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('online_test', False, 'online test.')
