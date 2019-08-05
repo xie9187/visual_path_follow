@@ -446,12 +446,12 @@ class GazeboWorld():
         text = ['S', 'R', 'F', 'L']
         font = cv2.FONT_HERSHEY_SIMPLEX
         colour = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 255, 255)]
-        cv2.putText(img,text[cmd],(self.rgb_image_size[0]/2, self.rgb_image_size[1]/5*4),font, 4,colour[cmd],2,cv2.LINE_AA)
+        cv2.putText(img,text[cmd],(self.rgb_image_size[0]/2, self.rgb_image_size[1]/5*4),font, 1,colour[cmd],2,cv2.LINE_AA)
         try:
             resized_img = self.bridge.cv2_to_imgmsg(img, "bgr8")
         except Exception as e:
             raise e
-        self.resized_rgb_img.publish(resized_img)
+        self.command_pub.publish(resized_img)
 
     def PathPublish(self, position):
         my_path = Path()

@@ -253,6 +253,16 @@ def moving_average(x, window_len):
     w = np.ones(window_len, 'd')
     y = np.convolve(x, w/w.sum(), mode='same')
     return y
+
+def img_normalisation(img_seq):
+    img_seq = img_seq.astype(np.float32)
+    img_seq[..., 0] -= 75.81717218
+    img_seq[..., 0] /= 42.55792425
+    img_seq[..., 1] -= 61.19639863
+    img_seq[..., 1] /= 43.39973921
+    img_seq[..., 2] -= 49.70393136
+    img_seq[..., 2] /= 47.69464972
+    return img_seq
     
 def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, lag=20):
     start_time = time.time()
@@ -274,12 +284,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         idx = start + i
         flow_seq = data[idx][1] # l, 1
         img_seq = data[idx][0].astype(np.float32) # l, h, w, c
-        img_seq[:, :, :, 0] -= 75.81717218
-        img_seq[:, :, :, 0] /= 42.55792425
-        img_seq[:, :, :, 1] -= 61.19639863
-        img_seq[:, :, :, 1] /= 43.39973921
-        img_seq[:, :, :, 2] -= 49.70393136
-        img_seq[:, :, :, 2] /= 47.69464972
+        img_seq = img_normalisation(img_seq)
 
         action_seq = data[idx][2] # l, 2
         # img_seq
