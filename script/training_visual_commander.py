@@ -47,7 +47,7 @@ flag.DEFINE_float('keep_prob', 0.8, 'keep probability of drop out')
 flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
-
+flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
 # training param
 flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
                     'Data directory')
@@ -458,7 +458,8 @@ def main():
                                                  post_att_model=flags.post_att_model,
                                                  inputs_num=flags.inputs_num,
                                                  keep_prob=flags.keep_prob,
-                                                 loss_rate=flags.loss_rate)
+                                                 loss_rate=flags.loss_rate,
+                                                 stochastic_hard=flags.stochastic_hard)
         if flags.online_test:
             online_testing(sess, model)
         elif flags.offline_test:

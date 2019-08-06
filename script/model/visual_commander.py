@@ -34,7 +34,8 @@ class visual_commander(object):
                  post_att_model,
                  inputs_num,
                  keep_prob,
-                 loss_rate):
+                 loss_rate,
+                 stochastic_hard):
         self.sess = sess
         self.batch_size = batch_size
         self.max_step = max_step
@@ -54,6 +55,7 @@ class visual_commander(object):
         self.inputs_num = inputs_num
         self.keep_prob = keep_prob
         self.loss_rate = loss_rate
+        self.stochastic_hard = stochastic_hard
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             self.input_demo_img = tf.placeholder(tf.float32, shape=[None, max_n_demo] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
@@ -138,11 +140,12 @@ class visual_commander(object):
             demo_dense_seq, _ = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b*l, n_hidden
             att_pos = None
         elif self.demo_mode == 'hard':
-            demo_dense_seq, att_pos, l2_norm, att_cmd_vect = self.process_demo_hard_att(input_demo_img, 
-                                                                                        input_demo_cmd, 
-                                                                                        img_vect, 
-                                                                                        False, 
-                                                                                        demo_len)
+            demo_dense_seq, att_pos, att_logits, att_cmd_vect = self.process_demo_hard_att(input_demo_img, 
+                                                                                           input_demo_cmd, 
+                                                                                           img_vect, 
+                                                                                           False, 
+                                                                                           demo_len,
+                                                                                           self.stochastic_hard)
         # post-attention inputs
         # dropouts
         demo_dense_seq = tf.nn.dropout(demo_dense_seq, rate=1.-self.keep_prob)
@@ -211,8 +214,7 @@ class visual_commander(object):
         all_accuracy = tf.cast((all_correct_num - tf.reduce_sum(1-pred_mask)), tf.float32)/tf.cast(tf.reduce_sum(pred_mask), tf.float32)
 
         # reinforce
-        logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
-        sample_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=att_pos) * loss_mask # b*l
+        sample_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=att_logits, labels=att_pos) * loss_mask # b*l
         sample_loss = tf.reduce_sum(sample_loss)/tf.reduce_sum(loss_mask)
         reward_estimate = model_utils.reward_estimate(all_inputs, all_accuracy) * loss_mask # b*l
         select_loss = sample_loss * tf.stop_gradient(reward_estimate) # b*l
@@ -240,11 +242,11 @@ class visual_commander(object):
         if self.demo_mode == 'sum':
             _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
         elif self.demo_mode == 'hard':
-            demo_dense, att_pos, l2_norm, _ = self.process_demo_hard_att(input_demo_img, 
-                                                                         input_demo_cmd, 
-                                                                         img_vect, 
-                                                                         True, 
-                                                                         demo_len)
+            demo_dense, att_pos, att_logits, _ = self.process_demo_hard_att(input_demo_img, 
+                                                                            input_demo_cmd, 
+                                                                            img_vect, 
+                                                                            True, 
+                                                                            demo_len)
 
         if self.inputs_num <= 2:
             all_inputs = demo_dense
@@ -300,8 +302,8 @@ class visual_commander(object):
 
         return demo_dense_seq, demo_dense
 
-    def process_demo_hard_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag, demo_len):
-        print 'attention mode: hard'
+    def process_demo_hard_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag, demo_len, stochastic_flag):
+        
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
         demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
         shape = demo_img_vect.get_shape().as_list()
@@ -310,11 +312,21 @@ class visual_commander(object):
             demo_img_vect = tf.tile(tf.expand_dims(demo_img_vect, axis=1), [1, self.max_step, 1, 1]) # b, l, n, dim_img_feat
             demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b*l, n, dim_img_feat
         img_vect = tf.tile(tf.expand_dims(img_vect, axis=1), [1, self.max_n_demo, 1]) # b*l, n, dim_img_feat
-        l2_norm = safe_norm(demo_img_vect - img_vect, axis=2) # b*l, n
-        norm_mask = tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.bool) # b, n
-        norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
-        self.l2_norm = l2_norm
-        att_pos = tf.argmax(tf.math.softmax(-l2_norm), axis=1) # b*l
+        if stochastic_flag:
+            print 'attention mode: stochastic hard'
+            dot_pro =  tf.reduce_sum(demo_img_vect*img_vect, axis=2) # b*l, n
+            prob = tf.sigmoid(dot_pro) # b*l, n
+            logits = tf.log(prob) # b*l, n
+            att_pos = tf.reshape(tf.random.categorical(logits, 1), [-1]) # b*l
+            self.l2_norm = prob
+        else:
+            print 'attention mode: argmax hard'
+            l2_norm = safe_norm(demo_img_vect - img_vect, axis=2) # b*l, n
+            # norm_mask = tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.bool) # b, n
+            # norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
+            logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
+            att_pos = tf.argmax(logits, axis=1) # b*l
+            self.l2_norm = l2_norm
 
         shape = tf.shape(img_vect)
         coords = tf.stack([tf.range(shape[0]), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
@@ -332,7 +344,7 @@ class visual_commander(object):
             demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
         demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
 
-        return demo_dense, att_pos, l2_norm, attended_demo_cmd_vect
+        return demo_dense, att_pos, logits, attended_demo_cmd_vect
 
     def process_demo_semi_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag):
         print 'attention mode: semi-hard'
