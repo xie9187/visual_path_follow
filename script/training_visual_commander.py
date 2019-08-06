@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 
 from data_generation.GazeboRoomDataGenerator import GridWorld, FileProcess
 from data_generation.GazeboWorld import GazeboWorld
+from utils.ou_noise import OUNoise
 
 CWD = os.getcwd()
 RANDOM_SEED = 1234
@@ -44,6 +45,9 @@ flag.DEFINE_string('post_att_model', 'gru', 'the model to use after attention (g
 flag.DEFINE_integer('inputs_num', 3, 'how many kinds of inputs used (2, 4)')
 flag.DEFINE_float('keep_prob', 0.8, 'keep probability of drop out')
 flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
+flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
+flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
+
 # training param
 flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
                     'Data directory')
@@ -55,6 +59,11 @@ flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('online_test', False, 'online test.')
 flag.DEFINE_boolean('offline_test', False, 'offline test test with batches.')
+
+# noise param
+flag.DEFINE_float('mu', 0., 'mu')
+flag.DEFINE_float('theta', 0.15, 'theta')
+flag.DEFINE_float('sigma', 0.3, 'sigma')
 
 flags = flag.FLAGS
 
@@ -248,7 +257,184 @@ def offline_testing(sess, model):
         data_utils.save_file(dist_name, l2_norm)
 
 def online_testing(sess, model):
-    pass
+    # initialise env
+    robot_name = 'robot1'
+    env = GazeboWorld(robot_name, rgb_size=[flags.dim_rgb_w, flags.dim_rgb_h])
+    world = GridWorld()
+    cv2.imwrite('./world/map.png', np.flipud(1-world.map)*255)
+    FileProcess()    
+    print "Env initialized"
+    # initialise model
+    model_dir = os.path.join(flags.model_dir, flags.model_name)
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+    sess.run(init_op)
+    trainable_var = tf.trainable_variables()
+    part_var = []
+    for idx, v in enumerate(trainable_var):
+        print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
+    saver = tf.train.Saver(trainable_var, max_to_keep=5, save_relative_paths=True)
+    checkpoint = tf.train.get_checkpoint_state(model_dir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+        saver.restore(sess, checkpoint.model_checkpoint_path)
+        print 'model loaded: ', checkpoint.model_checkpoint_path 
+    else:
+        print 'model not found'
+
+    exploration_noise = OUNoise(action_dimension=flags.dim_a, 
+                                mu=flags.mu, theta=flags.theta, sigma=flags.sigma)
+
+    rate = rospy.Rate(5.)
+    T = 0
+    episode = 0
+    time.sleep(2.)
+    demo_flag = True
+    while not rospy.is_shutdown():
+        time.sleep(2.)
+        if episode % 10 == 0 and demo_flag:
+            print 'randomising the environment'
+            env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
+            world.RandomTableAndMap()
+            world.GetAugMap()
+            obj_list = env.GetModelStates()
+            obj_pose_dict = world.AllocateObject(obj_list)
+            for name in obj_pose_dict:
+                env.SetObjectPose(name, obj_pose_dict[name])
+            time.sleep(1.)
+            print 'randomisation finished'
+
+        if demo_flag:
+            try:
+                table_route, map_route, real_route, init_pose = world.RandomPath()
+                timeout_flag = False
+            except:
+                timeout_flag = True
+                print 'random path timeout'
+                continue
+        env.SetObjectPose(robot_name, [init_pose[0], init_pose[1], 0., init_pose[2]], once=True)
+
+        time.sleep(0.1)
+        dynamic_route = copy.deepcopy(real_route)
+        time.sleep(0.1)
+
+        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
+        pose = env.GetSelfStateGT()
+        cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, 2, [0., 0.])
+        try:
+            local_next_goal = env.Global2Local([next_goal], pose)[0]
+        except Exception as e:
+            print 'next goal error'
+
+        env.last_target_point = copy.deepcopy(env.target_point)
+        env.target_point = next_goal
+        env.distance = np.sqrt(np.linalg.norm([pose[0]-local_next_goal[0], local_next_goal[1]-local_next_goal[1]]))
+
+        pose = env.GetSelfStateGT()
+        goal = real_route[-1]
+        env.target_point = goal
+        env.distance = np.sqrt(np.linalg.norm([pose[0]-goal[0], pose[1]-goal[1]]))
+
+        total_reward = 0
+        prev_action = [0., 0.]
+        epi_q = []
+        loop_time = []
+        t = 0
+        terminal = False
+        result = 0
+        if demo_flag:
+            demo_img_seq = np.zeros([1, flags.max_n_demo, flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c], dtype=np.uint8)
+            demo_cmd_seq = np.zeros([1, flags.max_n_demo, flags.dim_cmd], dtype=np.uint8)
+            demo_append_flag = True
+            demo_cnt = 0
+        else:
+            demo_append_flag = False
+        pred_cmd = 0
+        action = [0., 0.]
+        while not rospy.is_shutdown():
+            start_time = time.time()
+
+            terminate, result, reward = env.GetRewardAndTerminate(t, 
+                                                                  max_step=300, 
+                                                                  len_route=len(dynamic_route))
+            total_reward += reward
+
+            if result >= 1:
+                break
+            
+            rgb_image = env.GetRGBImageObservation()
+
+            # get action
+            pose = env.GetSelfStateGT()
+            try:
+                near_goal, dynamic_route = world.GetNextNearGoal(dynamic_route, pose)
+                env.LongPathPublish(dynamic_route)
+            except:
+                pass
+            prev_cmd = cmd
+            prev_last_cmd = last_cmd
+            prev_goal = next_goal
+            cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, 
+                                                           cmd_seq, 
+                                                           goal_seq, 
+                                                           pose, 
+                                                           prev_cmd,
+                                                           prev_last_cmd, 
+                                                           prev_goal)
+            env.last_target_point = copy.deepcopy(env.target_point)
+            env.target_point = next_goal
+            local_next_goal = env.Global2Local([next_goal], pose)[0]
+            env.PathPublish(local_next_goal)
+
+            # precit cmd
+            if not demo_flag:
+                pred_cmd, att_pos = model.online_predict(input_demo_img=demo_img_seq, 
+                                                        input_demo_cmd=demo_cmd_seq, 
+                                                        input_img=np.expand_dims(rgb_image, axis=0), 
+                                                        input_prev_cmd=[[pred_cmd]], 
+                                                        input_prev_action=[action], 
+                                                        demo_len=[demo_cnt], 
+                                                        t=t)
+                env.CommandPublish(pred_cmd)
+                env.PublishDemoRGBImage(demo_img_seq[0, att_pos], att_pos)
+            else:
+                env.CommandPublish(cmd)
+                env.PublishDemoRGBImage(demo_img_seq[0, max(demo_cnt-1, 0)], max(demo_cnt-1, 0))
+
+            local_near_goal = env.GetLocalPoint(near_goal)
+            action = env.Controller(local_near_goal, None, 1)
+
+            if not demo_flag:
+                action += (exploration_noise.noise() * np.asarray([flags.a_linear_range, flags.a_angular_range])*0.5)
+
+            local_next_goal = env.GetLocalPoint(next_goal)
+            env.PathPublish(local_next_goal)
+            
+            if demo_flag and demo_append_flag and env.distance < 0.85:
+                demo_append_flag = False
+                demo_img_seq[0, demo_cnt, :, :, :] = rgb_image
+                if cmd == 2:
+                    cmd = 0
+                demo_cmd_seq[0, demo_cnt, 0] = cmd
+                demo_cnt += 1
+                print 'append cmd: ', cmd
+            elif demo_flag and env.distance > 0.9:
+                demo_append_flag = True
+
+            env.SelfControl(action, [0.3, np.pi/6])
+
+            t += 1
+            T += 1
+            loop_time.append(time.time() - start_time)
+
+            rate.sleep()
+            # print '{:.4f}'.format(time.time() - start_time)
+
+        if not demo_flag:
+            print 'Episode:{:} | Steps:{:} | Reward:{:.2f} | T:{:}'.format(episode, 
+                                                                           t, 
+                                                                           total_reward, 
+                                                                           T)
+            episode += 1
+        demo_flag = not demo_flag
 
 def main():
     config = tf.ConfigProto(allow_soft_placement=True)

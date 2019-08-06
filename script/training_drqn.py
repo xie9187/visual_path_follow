@@ -34,7 +34,7 @@ flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
 flag.DEFINE_integer('dim_depth_h', 64, 'input depth image height.') 
 flag.DEFINE_integer('dim_depth_w', 64, 'input depth image width.') 
 flag.DEFINE_integer('dim_depth_c', 3, 'input depth image channels.')
-flag.DEFINE_integer('dim_action', 6, 'dimension of action.')
+flag.DEFINE_integer('dim_action', 7, 'dimension of action.')
 flag.DEFINE_integer('dim_goal', 2, 'dimension of goal.')
 flag.DEFINE_integer('dim_emb', 64, 'dimension of embedding.')
 flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
@@ -96,7 +96,7 @@ def main(sess, robot_name='robot1'):
         summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
     # model saver
-    saver = tf.train.Saver(trainable_var, max_to_keep=3)
+    saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
     sess.run(tf.global_variables_initializer())
 
     if flags.test or flags.load_network:
@@ -118,9 +118,10 @@ def main(sess, robot_name='robot1'):
     action_table = [[flags.a_linear_range, 0.],
                     [flags.a_linear_range, flags.a_angular_range],
                     [flags.a_linear_range, -flags.a_angular_range],
+                    [flags.a_linear_range, flags.a_angular_range/2],
+                    [flags.a_linear_range, -flags.a_angular_range/2],
                     [0., flags.a_angular_range],
-                    [0., -flags.a_angular_range],
-                    [0., 0.]]
+                    [0., -flags.a_angular_range]]
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:
@@ -213,9 +214,9 @@ def main(sess, robot_name='robot1'):
 
             prev_a = copy.deepcopy(action)
             q, gru_h_out = agent.ActionPredict([depth_stack], [[combined_cmd]], [prev_a], gru_h_in)
-            if T < flags.observe_steps:
+            if T < flags.observe_steps and not flags.test:
                 action_index = np.random.randint(flags.dim_action)
-            elif random.random() <= epsilon:
+            elif random.random() <= epsilon and not flags.test:
                 action_index = random.randrange(flags.dim_action)
             else:
                 action_index = np.argmax(q)
@@ -229,7 +230,7 @@ def main(sess, robot_name='robot1'):
 
             training_step_time = 0.
             if result >= 1:
-                if not (flags.supervision and (episode+1)%10 == 0):
+                if not (flags.supervision and (episode+1)%10 == 0) and not flags.test:
                     agent.Add2Mem(data_seq)
 
                 if len(agent.memory) > agent.batch_size and not flags.test:

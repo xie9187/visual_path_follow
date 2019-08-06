@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import utils.model_utils as model_utils
+import utils.data_utils as data_utils
 import copy
 import time
 
@@ -65,8 +66,12 @@ class visual_commander(object):
             self.demo_len = tf.placeholder(tf.int32, shape=[None], name='demo_len') #b
             self.seq_len = tf.placeholder(tf.int32, shape=[None], name='seq_len') #b
 
-            self.rnn_cell = model_utils._gru_cell(self.n_hidden, 1, name='rnn_cell')
             self.embedding_cmd = tf.get_variable('cmd_embedding', [self.n_cmd_type, self.dim_emb])
+
+            # testing inputs
+            self.test_img = tf.placeholder(tf.float32, shape=[None, dim_img[0], dim_img[1], dim_img[2]], name='test_img') #b,h,d,c
+            self.test_prev_cmd = tf.placeholder(tf.int32, shape=[None, dim_cmd], name='test_prev_cmd') #b,l,1
+            self.test_prev_action = tf.placeholder(tf.float32, shape=[None, dim_a], name='test_prev_action') #b,2
 
             if not self.test:
                 inputs = [self.input_demo_img, 
@@ -82,8 +87,14 @@ class visual_commander(object):
                 self.loss = tf.reduce_mean(gpu_cmd_loss) + tf.reduce_mean(gpu_att_loss) * self.loss_rate
                 self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
             else:
-                inputs = [self.input_demo_img, self.input_demo_cmd, self.input_img, self.input_prev_cmd, self.rnn_h_in, self.demo_len]
-                self.predict, self.rnn_h_out = self.testing_model_simple(inputs)
+                inputs = [self.input_demo_img, 
+                          self.input_demo_cmd, 
+                          self.test_img, 
+                          self.test_prev_cmd, 
+                          self.test_prev_action, 
+                          self.rnn_h_in, 
+                          self.demo_len]
+                self.predict, self.rnn_h_out, self.att_pos = self.testing_model(inputs)
 
         self.rnn_h_out_real = np.zeros([1, n_hidden])
 
@@ -132,9 +143,6 @@ class visual_commander(object):
                                                                                         img_vect, 
                                                                                         False, 
                                                                                         demo_len)
-        # elif self.demo_mode == 'semi':
-        #     demo_dense_seq, att_pos = self.process_demo_semi_att(input_demo_img, input_demo_cmd, img_vect, False)
-        
         # post-attention inputs
         # dropouts
         demo_dense_seq = tf.nn.dropout(demo_dense_seq, rate=1.-self.keep_prob)
@@ -157,7 +165,8 @@ class visual_commander(object):
             print 'post attention model: gru'  
             # rnn
             rnn_input = tf.reshape(inputs_dense, [-1, self.max_step, self.n_hidden])
-            rnn_output, _ = tf.nn.dynamic_rnn(self.rnn_cell, 
+            rnn_cell = model_utils._gru_cell(self.n_hidden, 1, name='rnn_cell')
+            rnn_output, _ = tf.nn.dynamic_rnn(rnn_cell, 
                                               rnn_input, 
                                               sequence_length=seq_len,
                                               dtype=tf.float32) # b, l, dim_emb
@@ -212,7 +221,7 @@ class visual_commander(object):
         att_loss = select_loss + baseline_loss
 
         # attention position
-        if self.demo_mode in ['hard', 'semi']:
+        if self.demo_mode == 'hard':
             att_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=att_pos.dtype) # b, l
             att_pos = tf.reshape(att_pos, [-1, self.max_step]) * att_mask # b, l
 
@@ -231,29 +240,34 @@ class visual_commander(object):
         if self.demo_mode == 'sum':
             _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
         elif self.demo_mode == 'hard':
-            demo_dense, att_pos, l2_norm, _ = self.process_demo_hard_att(input_demo_img, input_demo_cmd, img_vect, True, demo_len)
-        elif self.demo_mode == 'semi':
-            demo_dense, att_pos = self.process_demo_semi_att(input_demo_img, input_demo_cmd, img_vect, True)
+            demo_dense, att_pos, l2_norm, _ = self.process_demo_hard_att(input_demo_img, 
+                                                                         input_demo_cmd, 
+                                                                         img_vect, 
+                                                                         True, 
+                                                                         demo_len)
 
         if self.inputs_num <= 2:
             all_inputs = demo_dense
-        if self.inputs_num == 3:
+        elif self.inputs_num == 3:
             all_inputs = tf.concat([demo_dense, img_vect], axis=1) # b, n_hidden+dim_img_feat
+        elif self.inputs_num == 4:
+            all_inputs = tf.concat([demo_dense, img_vect, prev_cmd_vect], axis=1) # b, n_hidden+dim_img_feat
         elif self.inputs_num == 5:
             all_inputs = tf.concat([demo_dense, img_vect, prev_cmd_vect, prev_a_vect], axis=1) # b, n_hidden+dim_img_feat+dim_emb*2
         inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b, n_hidden
-        
+
         if self.post_att_model == 'gru':
+            rnn_cell = model_utils._gru_cell(self.n_hidden, 1, name='rnn/rnn_cell')
             rnn_output, rnn_h_out = rnn_cell(inputs_dense, rnn_h_in) # b, n_hidden | b, n_hidden
             logits = model_utils.dense_layer(rnn_output, self.n_cmd_type, scope='logits', activation=None) # b, n_cmd_type
         elif self.post_att_model == 'dense':
-            dense = model_utils.dense_layer(inputs_dense, self.n_hidden/2, scope='dense_1') # b, n_hidden/2
+            dense = model_utils.dense_layer(inputs_dense, self.n_hidden/2, scope='dense') # b, n_hidden/2
             logits = model_utils.dense_layer(dense, self.n_cmd_type, scope='logits', activation=None) # b, n_cmd_type
             rnn_h_out = rnn_h_in
 
         predict = tf.argmax(logits, axis=1) # b
 
-        return predict, rnn_h_out
+        return predict, rnn_h_out, att_pos
 
 
     def encode_image(self, inputs):
@@ -302,8 +316,8 @@ class visual_commander(object):
         self.l2_norm = l2_norm
         att_pos = tf.argmax(tf.math.softmax(-l2_norm), axis=1) # b*l
 
-        batch_size = tf.shape(img_vect)[0]/self.max_step
-        coords = tf.stack([tf.range(batch_size*self.max_step), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
+        shape = tf.shape(img_vect)
+        coords = tf.stack([tf.range(shape[0]), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
         attended_demo_img_vect = tf.gather_nd(demo_img_vect, coords) # b*l,  dim_img_feat 
 
         demo_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_demo_cmd), [-1, self.max_n_demo, self.dim_emb]) # b, n, dim_emb
@@ -396,18 +410,19 @@ class visual_commander(object):
         else:
             return [], []
 
-    def predict(input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, demo_len, t):
+    def online_predict(self, input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, demo_len, t):
         if t == 0:
             rnn_h_in = np.zeros([1, self.n_hidden], np.float32)
         else:
             rnn_h_in = copy.deepcopy(self.rnn_h_out_real)
-        predict, self.rnn_h_out_real = self.sess.run([self.predict, self.rnn_h_out], feed_dict={
-                                                      self.input_demo_img_test: input_demo_img,
-                                                      self.input_demo_cmd: input_demo_cmd,
-                                                      self.input_img: input_img,
-                                                      self.input_prev_cmd: input_prev_cmd,
-                                                      self.input_prev_action: input_prev_action,
-                                                      self.demo_len: demo_len,
-                                                      self.rnn_h_in: rnn_h_in
-                                                      })
-        return predict[0]
+
+        predict, self.rnn_h_out_real, att_pos = self.sess.run([self.predict, self.rnn_h_out, self.att_pos], feed_dict={
+                                                              self.input_demo_img: data_utils.img_normalisation(copy.deepcopy(input_demo_img)),
+                                                              self.input_demo_cmd: input_demo_cmd,
+                                                              self.test_img: data_utils.img_normalisation(copy.deepcopy(input_img)),
+                                                              self.test_prev_cmd: input_prev_cmd,
+                                                              self.test_prev_action: input_prev_action,
+                                                              self.demo_len: demo_len,
+                                                              self.rnn_h_in: rnn_h_in
+                                                              })
+        return predict[0], att_pos[0]

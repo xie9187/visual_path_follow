@@ -101,7 +101,7 @@ def main(sess, robot_name='robot1'):
         summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
     # model saver
-    saver = tf.train.Saver(trainable_var, max_to_keep=3)
+    saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
     sess.run(tf.global_variables_initializer())
 
     if flags.test or flags.load_network:
