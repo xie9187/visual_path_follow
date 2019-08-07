@@ -314,11 +314,11 @@ class visual_commander(object):
         img_vect = tf.tile(tf.expand_dims(img_vect, axis=1), [1, self.max_n_demo, 1]) # b*l, n, dim_img_feat
         if stochastic_flag:
             print 'attention mode: stochastic hard'
-            dot_pro =  tf.reduce_sum(demo_img_vect*img_vect, axis=2) # b*l, n
-            prob = tf.sigmoid(dot_pro) # b*l, n
-            logits = tf.log(prob + 1e-12) # b*l, n
+            l2_norm = safe_norm(demo_img_vect - img_vect, axis=2) # b*l, n
+            w = tf.get_variable('w', [], initializer=tf.initializers.ones())
+            b = tf.get_variable('b', [], initializer=tf.initializers.zeros())
+            logits = tf.log(tf.nn.softmax(tf.nn.relu(l2_norm*w+b)+1e-12)) # b*l, n
             att_pos = tf.reshape(tf.random.categorical(logits, 1), [-1]) # b*l
-            self.l2_norm = prob
         else:
             print 'attention mode: argmax hard'
             l2_norm = safe_norm(demo_img_vect - img_vect, axis=2) # b*l, n
@@ -326,7 +326,7 @@ class visual_commander(object):
             # norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
             logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
             att_pos = tf.argmax(logits, axis=1) # b*l
-            self.l2_norm = l2_norm
+        self.l2_norm = l2_norm
 
         shape = tf.shape(img_vect)
         coords = tf.stack([tf.range(shape[0]), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
