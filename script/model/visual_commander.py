@@ -326,8 +326,8 @@ class visual_commander(object):
             # norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
             w = tf.get_variable('w', [], initializer=tf.initializers.ones())
             b = tf.get_variable('b', [], initializer=tf.initializers.zeros())
-            logits = tf.log(tf.nn.softmax(l2_norm*w+b)) # b*l, n
-            # logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
+            # logits = tf.log(tf.nn.softmax(l2_norm*w+b)) # b*l, n
+            logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
             att_pos = tf.argmax(logits, axis=1) # b*l
         self.l2_norm = l2_norm
 
