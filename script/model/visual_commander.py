@@ -324,7 +324,10 @@ class visual_commander(object):
             l2_norm = safe_norm(demo_img_vect - img_vect, axis=2) # b*l, n
             # norm_mask = tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.bool) # b, n
             # norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
-            logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
+            w = tf.get_variable('w', [], initializer=tf.initializers.ones())
+            b = tf.get_variable('b', [], initializer=tf.initializers.zeros())
+            logits = tf.log(tf.nn.softmax(l2_norm*w+b)) # b*l, n
+            # logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
             att_pos = tf.argmax(logits, axis=1) # b*l
         self.l2_norm = l2_norm
 
