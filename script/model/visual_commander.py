@@ -316,7 +316,7 @@ class visual_commander(object):
             print 'attention mode: stochastic hard'
             dot_pro =  tf.reduce_sum(demo_img_vect*img_vect, axis=2) # b*l, n
             prob = tf.sigmoid(dot_pro) # b*l, n
-            logits = tf.log(prob) # b*l, n
+            logits = tf.log(prob + 1e-12) # b*l, n
             att_pos = tf.reshape(tf.random.categorical(logits, 1), [-1]) # b*l
             self.l2_norm = prob
         else:
