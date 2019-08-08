@@ -21,7 +21,8 @@ class Network(object):
                  learning_rate,
                  batch_size,
                  gpu_num,
-                 prioritised_replay
+                 prioritised_replay,
+                 dueling
                  ):
 
         self.sess = sess
@@ -37,6 +38,7 @@ class Network(object):
         self.batch_size = batch_size
         self.gpu_num = gpu_num
         self.prioritised_replay = prioritised_replay
+        self.dueling = dueling
 
         with tf.variable_scope('drqn', reuse=tf.AUTO_REUSE):
             self.input_depth = tf.placeholder(tf.float32, [None]+self.dim_img, name='input_depth') # b*l, h, w, c
@@ -102,7 +104,17 @@ class Network(object):
                                           sequence_length=length,
                                           dtype=tf.float32) # b, l, h
         gru_output_reshape = tf.reshape(gru_output, [-1, self.n_hidden]) # b*l, h
-        q = model_utils.dense_layer(gru_output_reshape, self.dim_action, 'q', activation=None) # b*l, dim_action
+
+        if self.dueling:
+            dense_value = model_utils.dense_layer(gru_output_reshape, self.n_hidden, 'dense_value')# b*l, n_hidden
+            value = model_utils.dense_layer(gru_output_reshape, 1, 'value', activation=None)# b*l, 1
+            dense_adv = model_utils.dense_layer(gru_output_reshape, self.n_hidden, 'dense_adv')# b*l, n_hidden
+            adv = model_utils.dense_layer(gru_output_reshape, self.dim_action, 'adv', activation=None)# b*l, dim_action
+            adv_avg = tf.reduce_mean(adv, axis=1, keepdims=True)# b*l, 1
+            adv_identifiable = adv - adv_avg # b*l, dim_action
+            q = tf.add(value, adv_identifiable) # b*l, dim_action
+        else:
+            q = model_utils.dense_layer(gru_output_reshape, self.dim_action, 'q', activation=None) # b*l, dim_action
 
         # testing
         gru_output, gru_h_out = gru_cell(input_vect, gru_h_in) # b, h
@@ -188,6 +200,7 @@ class DRQN(object):
         self.gamma = flags.gamma
         self.gpu_num = flags.gpu_num
         self.prioritised_replay = flags.prioritised_replay
+        self.dueling = flags.dueling
 
         self.network = Network(sess=sess,
                                dim_action=self.dim_action,
@@ -201,7 +214,8 @@ class DRQN(object):
                                learning_rate=self.learning_rate,
                                batch_size=self.batch_size,
                                gpu_num=self.gpu_num,
-                               prioritised_replay=self.prioritised_replay)
+                               prioritised_replay=self.prioritised_replay,
+                               dueling=self.dueling)
 
         if self.prioritised_replay:
             self.memory = rper(self.buffer_size)

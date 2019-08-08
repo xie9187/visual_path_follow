@@ -43,6 +43,8 @@ flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ 
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
 flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
+flag.DEFINE_boolean('dueling', False, 'dueling network')
+flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
 
 # training param
 flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
@@ -54,7 +56,8 @@ flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('supervision', False, 'supervised learning')
 flag.DEFINE_boolean('load_network', False, 'load model learning')
-flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
+flag.DEFINE_float('label_action_rate', 0.02, 'rate of using labelled action')
+
 
 # noise param
 flag.DEFINE_float('init_epsilon', 0.1, 'init_epsilon')
@@ -178,6 +181,7 @@ def main(sess, robot_name='robot1'):
         data_seq = []
         t = 0
         terminate = False
+        label_action_flag = True if np.random.rand() < flags.label_action_rate else False
         while not rospy.is_shutdown():
             start_time = time.time()
 
@@ -216,6 +220,9 @@ def main(sess, robot_name='robot1'):
             env.PathPublish(local_next_goal)
             env.CommandPublish(cmd)
 
+            local_near_goal = env.GetLocalPoint(near_goal)
+            label_action = env.Controller(local_near_goal, None, 1)
+
             prev_a = copy.deepcopy(action)
             q, gru_h_out = agent.ActionPredict([depth_stack], [[combined_cmd]], [prev_a], gru_h_in)
             if T < flags.observe_steps and not flags.test:
@@ -226,6 +233,9 @@ def main(sess, robot_name='robot1'):
                 action_index = np.argmax(q)
             action = np.zeros([flags.dim_action], dtype=np.int32)
             action[action_index] = 1
+
+            if label_action_flag:
+                action = label_action
 
             env.SelfControl(action_table[action_index], [0.3, np.pi/6])
 
@@ -243,7 +253,7 @@ def main(sess, robot_name='robot1'):
                     for train_t in range(1):
                         q = agent.Train()
                     training_step_time = time.time() - training_step_start_time
-                    if t > 1:
+                    if t > 1 and not label_action_flag::
                         summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                               q_ph: np.amax(q)
                                                               })
@@ -256,7 +266,10 @@ def main(sess, robot_name='robot1'):
                              '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
                              '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
                              '| OpStepT(s): {:.3f}'.format(training_step_time)
-                print info_train
+                if not label_action_flag:
+                    print info_train
+                else:
+                    print '| demo episode |'
                 episode += 1
                 T += 1
                 break
