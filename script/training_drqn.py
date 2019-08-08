@@ -193,8 +193,9 @@ def main(sess, robot_name='robot1'):
 
             if t > 0:
                 if flags.zip_img:
-                    int_depth_stack = (depth_stack*255).astype(np.uint8)
-                data_seq.append([int_depth_stack, [combined_cmd], prev_a, action, reward, terminate])
+                    data_seq.append([(depth_stack*255).astype(np.uint8), [combined_cmd], prev_a, action, reward, terminate])
+                else:
+                    data_seq.append([depth_stack, [combined_cmd], prev_a, action, reward, terminate])
 
             rgb_image = env.GetRGBImageObservation()
             depth_img = env.GetDepthImageObservation()
