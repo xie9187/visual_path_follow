@@ -254,9 +254,9 @@ class DRQN(object):
                 batch.append(np.zeros([self.batch_size], dtype=np.int32))
                 for i, sampled_seq in enumerate(b_memory):
                     seq_len = len(sampled_seq)
-                    if sampled_seq[t][0].dtype is np.uint8:
-                        sampled_seq[t][0] = sampled_seq[t][0].astype(np.float32) / 255.
                     for t in xrange(0, seq_len):
+                        if sampled_seq[t][0].dtype is np.uint8:
+                            sampled_seq[t][0] = sampled_seq[t][0].astype(np.float32) / 255.
                         batch[0][i, t, :, :, :] = sampled_seq[t][0]
                         batch[1][i, t, :] = sampled_seq[t][1]
                         batch[2][i, t, :] = sampled_seq[t][2]
