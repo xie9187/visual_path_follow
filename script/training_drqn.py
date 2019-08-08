@@ -51,12 +51,13 @@ flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "drqn", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 100000, 'How many training steps to do per checkpoint.')
-flag.DEFINE_integer('buffer_size', 1000, 'The size of Buffer') #5000
+flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer') #5000
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('supervision', False, 'supervised learning')
 flag.DEFINE_boolean('load_network', False, 'load model learning')
-flag.DEFINE_float('label_action_rate', 0.02, 'rate of using labelled action')
+flag.DEFINE_float('label_action_rate', 0.00, 'rate of using labelled action')
+flag.DEFINE_boolean('zip_img', False, 'save img as uint8')
 
 
 # noise param
@@ -191,7 +192,9 @@ def main(sess, robot_name='robot1'):
             total_reward += reward
 
             if t > 0:
-                data_seq.append([depth_stack, [combined_cmd], prev_a, action, reward, terminate])
+                if flags.zip_img:
+                    int_depth_stack = (depth_stack*255).astype(np.uint8)
+                data_seq.append([int_depth_stack, [combined_cmd], prev_a, action, reward, terminate])
 
             rgb_image = env.GetRGBImageObservation()
             depth_img = env.GetDepthImageObservation()
@@ -235,9 +238,9 @@ def main(sess, robot_name='robot1'):
             action[action_index] = 1
 
             if label_action_flag:
-                action = label_action
-
-            env.SelfControl(action_table[action_index], [0.3, np.pi/6])
+                env.SelfControl(label_action, [0.3, np.pi/6])
+            else:
+                env.SelfControl(action_table[action_index], [0.3, np.pi/6])
 
             if (T + 1) % flags.steps_per_checkpoint == 0 and not flags.test:
                 saver.save(sess, os.path.join(model_dir, 'network') , global_step=episode)
@@ -253,7 +256,7 @@ def main(sess, robot_name='robot1'):
                     for train_t in range(1):
                         q = agent.Train()
                     training_step_time = time.time() - training_step_start_time
-                    if t > 1 and not label_action_flag::
+                    if t > 1 and not label_action_flag:
                         summary = sess.run(merged, feed_dict={reward_ph: total_reward,
                                                               q_ph: np.amax(q)
                                                               })
