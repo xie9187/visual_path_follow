@@ -22,7 +22,7 @@ RANDOM_SEED = 1234
 flag = tf.app.flags
 
 # network param
-flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 8, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-3, 'Critic learning rate.')
 flag.DEFINE_integer('max_epi_step', 200, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
@@ -49,11 +49,12 @@ flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "drqn", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 100000, 'How many training steps to do per checkpoint.')
-flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer')
+flag.DEFINE_integer('buffer_size', 1000, 'The size of Buffer') #5000
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('supervision', False, 'supervised learning')
 flag.DEFINE_boolean('load_network', False, 'load model learning')
+flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
 
 # noise param
 flag.DEFINE_float('init_epsilon', 0.1, 'init_epsilon')
@@ -96,7 +97,10 @@ def main(sess, robot_name='robot1'):
         summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
     # model saver
-    saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
+    if flags.test:
+        saver = tf.train.Saver(trainable_var, max_to_keep=3, save_relative_paths=True) 
+    else:
+        saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
     sess.run(tf.global_variables_initializer())
 
     if flags.test or flags.load_network:
@@ -233,7 +237,8 @@ def main(sess, robot_name='robot1'):
                 if not (flags.supervision and (episode+1)%10 == 0) and not flags.test:
                     agent.Add2Mem(data_seq)
 
-                if len(agent.memory) > agent.batch_size and not flags.test:
+                mem_len = len(agent.memory.tree.data) if flags.prioritised_replay else len(agent.memory)
+                if mem_len > agent.batch_size and not flags.test:
                     training_step_start_time = time.time()
                     for train_t in range(1):
                         q = agent.Train()

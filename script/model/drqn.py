@@ -5,7 +5,8 @@ import copy
 import time
 import random
 import utils.model_utils as model_utils
-
+from utils.recurrent_prioritised_buffer import recurrent_memory as rper
+ 
 class Network(object):
     def __init__(self,
                  sess,
@@ -19,7 +20,8 @@ class Network(object):
                  tau,
                  learning_rate,
                  batch_size,
-                 gpu_num
+                 gpu_num,
+                 prioritised_replay
                  ):
 
         self.sess = sess
@@ -34,6 +36,7 @@ class Network(object):
         self.tau = tau
         self.batch_size = batch_size
         self.gpu_num = gpu_num
+        self.prioritised_replay = prioritised_replay
 
         with tf.variable_scope('drqn', reuse=tf.AUTO_REUSE):
             self.input_depth = tf.placeholder(tf.float32, [None]+self.dim_img, name='input_depth') # b*l, h, w, c
@@ -41,6 +44,7 @@ class Network(object):
             self.input_prev_a = tf.placeholder(tf.int32, [None, self.dim_action], name='input_prev_a')
             self.gru_h_in = tf.placeholder(tf.float32, shape=[None, self.n_hidden], name='gru_h_in') # b, n_hidden
             self.length = tf.placeholder(tf.int32, [self.batch_size], name='length') # b
+            self.ISWeights = tf.placeholder(tf.float32, [None, 1], name='IS_weights') # b ,1
 
             inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.gru_h_in, self.length]
             with tf.variable_scope('online'):
@@ -57,6 +61,11 @@ class Network(object):
             selected_q = tf.reduce_sum(tf.multiply(self.q_online, self.input_action), axis=1) # b*l
             self.mask = tf.reshape(tf.sequence_mask(self.length, maxlen=self.max_step, dtype=tf.float32), [-1]) # b*l
             td_error = tf.square(y - selected_q) * self.mask # b*l
+            if self.prioritised_replay:
+                td_error_seq = tf.reshape(td_error, [-1, self.max_step]) # b, l
+                self.q_errors = 0.1*tf.reduce_mean(td_error_seq, axis=1) + 0.9*tf.reduce_max(td_error_seq, axis=1) # b
+                ISWeights = tf.reshape(tf.tile(self.ISWeights, [1, self.max_step]), [-1]) # b*l
+                td_error = td_error * ISWeights 
             loss = tf.reduce_mean(td_error)
             self.optimize = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
@@ -101,19 +110,30 @@ class Network(object):
         
         return q, q_test, gru_h_out
 
-    def Train(self, input_depth, input_cmd, input_prev_a, input_action, y, length):
+    def Train(self, input_depth, input_cmd, input_prev_a, input_action, y, length, ISWeights=None):
         input_depth = np.reshape(input_depth, [-1]+self.dim_img)
         input_cmd = np.reshape(input_cmd, [-1, self.dim_cmd])
         input_prev_a = np.reshape(input_prev_a, [-1, self.dim_action])
         input_action = np.reshape(input_action, [-1, self.dim_action])
-        return self.sess.run([self.q_online, self.optimize, self.mask], feed_dict={
-            self.input_depth: input_depth,
-            self.input_cmd: input_cmd,
-            self.input_prev_a: input_prev_a,
-            self.input_action: input_action,
-            self.y: y,
-            self.length: length
-            })
+        if self.prioritised_replay:
+            return self.sess.run([self.q_online, self.optimize, self.mask, self.q_errors], feed_dict={
+                self.input_depth: input_depth,
+                self.input_cmd: input_cmd,
+                self.input_prev_a: input_prev_a,
+                self.input_action: input_action,
+                self.y: y,
+                self.length: length,
+                self.ISWeights: ISWeights
+                })
+        else:
+            return self.sess.run([self.q_online, self.optimize, self.mask], feed_dict={
+                self.input_depth: input_depth,
+                self.input_cmd: input_cmd,
+                self.input_prev_a: input_prev_a,
+                self.input_action: input_action,
+                self.y: y,
+                self.length: length
+                })
 
     def PredictSeqTarget(self, input_depth, input_cmd, input_prev_a, length):
         input_depth = np.reshape(input_depth, [-1]+self.dim_img)
@@ -167,6 +187,7 @@ class DRQN(object):
         self.buffer_size = flags.buffer_size
         self.gamma = flags.gamma
         self.gpu_num = flags.gpu_num
+        self.prioritised_replay = flags.prioritised_replay
 
         self.network = Network(sess=sess,
                                dim_action=self.dim_action,
@@ -179,9 +200,13 @@ class DRQN(object):
                                tau=self.tau,
                                learning_rate=self.learning_rate,
                                batch_size=self.batch_size,
-                               gpu_num=self.gpu_num)
+                               gpu_num=self.gpu_num,
+                               prioritised_replay=self.prioritised_replay)
 
-        self.memory = []
+        if self.prioritised_replay:
+            self.memory = rper(self.buffer_size)
+        else:
+            self.memory = []
         self.batch_info_list = [{'name': 'depth', 'dim': [self.batch_size, self.max_step]+self.dim_img, 'type': np.float32},
                                 {'name': 'cmd', 'dim': [self.batch_size, self.max_step, self.dim_cmd], 'type': np.int32},
                                 {'name': 'prev_a', 'dim': [self.batch_size, self.max_step, self.dim_action], 'type': np.float32}, 
@@ -197,43 +222,75 @@ class DRQN(object):
         return a[0], gru_h_out
 
     def Add2Mem(self, sample):
-        if len(sample) <= self.max_step:
-            self.memory.append(sample) # seqs of (depth, cmd, prev_a, action, reward, terminate) 
-        if len(self.memory) > self.buffer_size:
-            self.memory.pop(0)
+        if self.prioritised_replay:
+            self.memory.store(sample)
+        else:
+            if len(sample) <= self.max_step:
+                self.memory.append(sample) # seqs of (depth, cmd, prev_a, action, reward, terminate) 
+            if len(self.memory) > self.buffer_size:
+                self.memory.pop(0)
 
     def SampleBatch(self):
-        if len(self.memory) >= self.batch_size:
-            indices = np.random.randint(0, len(self.memory), size=self.batch_size)
+        if self.prioritised_replay:
+            if len(self.memory.tree.data) >= self.batch_size:
+                b_idx, b_memory, ISWeights = self.memory.sample(self.batch_size)
+                batch = []
+                for info in self.batch_info_list:
+                    batch.append(np.zeros(info['dim'], dtype=info['type']))
+                batch.append(np.zeros([self.batch_size], dtype=np.int32))
+                for i, sampled_seq in enumerate(b_memory):
+                    seq_len = len(sampled_seq)
+                    for t in xrange(0, seq_len):
+                        batch[0][i, t, :, :, :] = sampled_seq[t][0]
+                        batch[1][i, t, :] = sampled_seq[t][1]
+                        batch[2][i, t, :] = sampled_seq[t][2]
+                        batch[3][i, t, :] = sampled_seq[t][3]
+                        batch[4][i, t] = sampled_seq[t][4]
+                        batch[5][i, t] = sampled_seq[t][5]
+                        batch[6][i, t, :, :, :] = sampled_seq[t+1][0] if t < seq_len - 1 else sampled_seq[t][0]
+                        batch[7][i, t, :] = sampled_seq[t+1][1] if t < seq_len - 1 else sampled_seq[t][1]
+                        batch[8][i, t, :] = sampled_seq[t+1][2] if t < seq_len - 1 else sampled_seq[t][2]
+                    batch[9][i] = seq_len
+                return b_idx, batch, ISWeights
 
-            batch = []
-            for info in self.batch_info_list:
-                batch.append(np.zeros(info['dim'], dtype=info['type']))
-            batch.append(np.zeros([self.batch_size], dtype=np.int32))
-
-            for i, idx in enumerate(indices):
-                sampled_seq = self.memory[idx]
-                seq_len = len(sampled_seq)
-                
-                for t in xrange(0, seq_len):
-                    batch[0][i, t, :, :, :] = sampled_seq[t][0]
-                    batch[1][i, t, :] = sampled_seq[t][1]
-                    batch[2][i, t, :] = sampled_seq[t][2]
-                    batch[3][i, t, :] = sampled_seq[t][3]
-                    batch[4][i, t] = sampled_seq[t][4]
-                    batch[5][i, t] = sampled_seq[t][5]
-                    batch[6][i, t, :, :, :] = sampled_seq[t+1][0] if t < seq_len - 1 else sampled_seq[t][0]
-                    batch[7][i, t, :] = sampled_seq[t+1][1] if t < seq_len - 1 else sampled_seq[t][1]
-                    batch[8][i, t, :] = sampled_seq[t+1][2] if t < seq_len - 1 else sampled_seq[t][2]
-                batch[9][i] = seq_len
-            return batch
+            else:
+                print 'samples are not enough'
+                return None, None, None 
         else:
-            print 'samples are not enough'
-            return None
+            if len(self.memory) >= self.batch_size:
+                indices = np.random.randint(0, len(self.memory), size=self.batch_size)
+
+                batch = []
+                for info in self.batch_info_list:
+                    batch.append(np.zeros(info['dim'], dtype=info['type']))
+                batch.append(np.zeros([self.batch_size], dtype=np.int32))
+
+                for i, idx in enumerate(indices):
+                    sampled_seq = self.memory[idx]
+                    seq_len = len(sampled_seq)
+                    
+                    for t in xrange(0, seq_len):
+                        batch[0][i, t, :, :, :] = sampled_seq[t][0]
+                        batch[1][i, t, :] = sampled_seq[t][1]
+                        batch[2][i, t, :] = sampled_seq[t][2]
+                        batch[3][i, t, :] = sampled_seq[t][3]
+                        batch[4][i, t] = sampled_seq[t][4]
+                        batch[5][i, t] = sampled_seq[t][5]
+                        batch[6][i, t, :, :, :] = sampled_seq[t+1][0] if t < seq_len - 1 else sampled_seq[t][0]
+                        batch[7][i, t, :] = sampled_seq[t+1][1] if t < seq_len - 1 else sampled_seq[t][1]
+                        batch[8][i, t, :] = sampled_seq[t+1][2] if t < seq_len - 1 else sampled_seq[t][2]
+                    batch[9][i] = seq_len
+                return batch
+            else:
+                print 'samples are not enough'
+                return None
 
     def Train(self):
         start_time = time.time()
-        batch = self.SampleBatch()
+        if self.prioritised_replay:
+            b_idx, batch, ISWeights = self.SampleBatch()
+        else:
+            batch = self.SampleBatch()
         sample_time =  time.time() - start_time
 
         if not batch:
@@ -263,17 +320,30 @@ class DRQN(object):
             y_time = time.time() - start_time - sample_time
 
             # update
-            q, _, mask = self.network.Train(input_depth=depth, 
-                                           input_action=action,
-                                           input_cmd=cmd, 
-                                           input_prev_a=prev_a, 
-                                           y=y,
-                                           length=length)
+            if self.prioritised_replay:
+                q, _, mask, q_errors = self.network.Train(input_depth=depth, 
+                                                      input_action=action,
+                                                      input_cmd=cmd, 
+                                                      input_prev_a=prev_a, 
+                                                      y=y,
+                                                      length=length,
+                                                      ISWeights=ISWeights)
+            else:
+                q, _, mask = self.network.Train(input_depth=depth, 
+                                               input_action=action,
+                                               input_cmd=cmd, 
+                                               input_prev_a=prev_a, 
+                                               y=y,
+                                               length=length)
 
             train_time = time.time() - start_time - sample_time - y_time
 
             # target networks update
             self.network.UpdateTarget()
+
+            # memory update
+            if self.prioritised_replay:
+                self.memory.batch_update(b_idx, q_errors)
 
             target_time = time.time() - start_time - sample_time - y_time - train_time
 
