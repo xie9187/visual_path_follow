@@ -22,7 +22,8 @@ class Network(object):
                  batch_size,
                  gpu_num,
                  prioritised_replay,
-                 dueling
+                 dueling,
+                 var_start
                  ):
 
         self.sess = sess
@@ -51,11 +52,11 @@ class Network(object):
             inputs = [self.input_depth, self.input_cmd, self.input_prev_a, self.gru_h_in, self.length]
             with tf.variable_scope('online'):
                 self.q_online, self.q_test, self.gru_h_out = self.Model(inputs)
-            self.network_params = tf.trainable_variables()
+            self.network_params = tf.trainable_variables()[var_start:]
 
             with tf.variable_scope('target'):
                 self.q_target, _, _ = self.Model(inputs)
-            self.target_network_params = tf.trainable_variables()[len(self.network_params):]
+            self.target_network_params = tf.trainable_variables()[(var_start+len(self.network_params)):]
 
             self.y = tf.placeholder(tf.float32, [None, self.max_step, 1], name='y') # b, l, 1
             y = tf.reshape(self.y, [-1]) # b*l
@@ -185,10 +186,9 @@ class Network(object):
 
 class DRQN(object):
     """DRQN"""
-    def __init__(self, flags, sess):
+    def __init__(self, flags, sess, var_start=0):
         self.dim_img = [flags.dim_depth_h, flags.dim_depth_w, flags.dim_depth_c]
         self.dim_action = flags.dim_action
-        self.dim_goal = flags.dim_goal
         self.dim_emb = flags.dim_emb
         self.dim_cmd = flags.dim_cmd
         self.n_cmd_type = flags.n_cmd_type
@@ -217,7 +217,8 @@ class DRQN(object):
                                batch_size=self.batch_size,
                                gpu_num=self.gpu_num,
                                prioritised_replay=self.prioritised_replay,
-                               dueling=self.dueling)
+                               dueling=self.dueling,
+                               var_start=var_start)
 
         if self.prioritised_replay:
             self.memory = rper(self.buffer_size)

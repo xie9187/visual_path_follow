@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from data_generation.GazeboRoomDataGenerator import GridWorld, FileProcess
 from data_generation.GazeboWorld import GazeboWorld
 from utils.ou_noise import OUNoise
+from model.drqn import DRQN
 
 CWD = os.getcwd()
 RANDOM_SEED = 1234
@@ -48,11 +49,23 @@ flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
+
+# rdqn param
+flag.DEFINE_integer('max_epi_step', 300, 'max step.')
+flag.DEFINE_float('tau', 0.01, 'Target network update rate')
+flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
+flag.DEFINE_boolean('dueling', False, 'dueling network')
+flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
+flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer') #5000
+flag.DEFINE_string('controller_model_name', 'drqn', 'Name of the model.')
+flag.DEFINE_integer('dim_action', 5, 'dimension of action.')
+flag.DEFINE_boolean('test', True, 'whether to test.')
+flag.DEFINE_float('gamma', 0.99, 'reward discount')
+
 # training param
 flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
                     'Data directory')
 flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
-flag.DEFINE_string('load_model_dir', ' ', 'load model directory.')
 flag.DEFINE_string('model_name', 'vc_demo_sum', 'model name.')
 flag.DEFINE_integer('max_epoch', 50, 'max epochs.')
 flag.DEFINE_boolean('save_model', True, 'save model.')
@@ -256,7 +269,7 @@ def offline_testing(sess, model):
         dist_name = os.path.join(model_dir, 'batch_{:d}_norm.csv'.format(batch_id))
         data_utils.save_file(dist_name, l2_norm)
 
-def online_testing(sess, model):
+def online_testing(sess, model, agent):
     # initialise env
     robot_name = 'robot1'
     env = GazeboWorld(robot_name, rgb_size=[flags.dim_rgb_w, flags.dim_rgb_h])
@@ -265,20 +278,34 @@ def online_testing(sess, model):
     FileProcess()    
     print "Env initialized"
     # initialise model
-    model_dir = os.path.join(flags.model_dir, flags.model_name)
+    commander_model_dir = os.path.join(flags.model_dir, flags.model_name)
+    controller_model_dir = os.path.join(flags.model_dir, flags.controller_model_name)
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     sess.run(init_op)
     trainable_var = tf.trainable_variables()
-    part_var = []
+    commander_var = []
+    controller_var = []
     for idx, v in enumerate(trainable_var):
         print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
-    saver = tf.train.Saver(trainable_var, max_to_keep=5, save_relative_paths=True)
-    checkpoint = tf.train.get_checkpoint_state(model_dir)
+        if 'drqn' in v.name:
+            controller_var.append(v)
+        else:
+            commander_var.append(v)
+    commander_saver = tf.train.Saver(commander_var)
+    checkpoint = tf.train.get_checkpoint_state(commander_model_dir)
     if checkpoint and checkpoint.model_checkpoint_path:
-        saver.restore(sess, checkpoint.model_checkpoint_path)
-        print 'model loaded: ', checkpoint.model_checkpoint_path 
+        commander_saver.restore(sess, checkpoint.model_checkpoint_path)
+        print 'commander model loaded: ', checkpoint.model_checkpoint_path 
     else:
-        print 'model not found'
+        print 'commander model not found'
+
+    controller_saver = tf.train.Saver(controller_var)
+    checkpoint = tf.train.get_checkpoint_state(controller_model_dir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+        controller_saver.restore(sess, checkpoint.model_checkpoint_path)
+        print 'controller model loaded: ', checkpoint.model_checkpoint_path 
+    else:
+        print 'controller model not found'
 
     exploration_noise = OUNoise(action_dimension=flags.dim_a, 
                                 mu=flags.mu, theta=flags.theta, sigma=flags.sigma)
@@ -349,6 +376,19 @@ def online_testing(sess, model):
             demo_append_flag = False
         pred_cmd = 0
         action = [0., 0.]
+        action_table = [[flags.a_linear_range, 0.],
+                        [flags.a_linear_range, flags.a_angular_range],
+                        [flags.a_linear_range, -flags.a_angular_range],
+                        # [flags.a_linear_range, flags.a_angular_range/2],
+                        # [flags.a_linear_range, -flags.a_angular_range/2],
+                        [0., flags.a_angular_range],
+                        [0., -flags.a_angular_range]]
+        depth_img = env.GetDepthImageObservation()
+        depth_stack = np.stack([depth_img, depth_img, depth_img], axis=-1)
+        one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
+        one_hot_action[0] = 1
+        goal = [0., 0.]
+        gru_h_in = np.zeros([1, flags.n_hidden])
         while not rospy.is_shutdown():
             start_time = time.time()
 
@@ -361,6 +401,8 @@ def online_testing(sess, model):
                 break
             
             rgb_image = env.GetRGBImageObservation()
+            depth_img = env.GetDepthImageObservation()
+            depth_stack = np.stack([depth_img, depth_stack[:, :, 0], depth_stack[:, :, 1]], axis=-1)
 
             # get action
             pose = env.GetSelfStateGT()
@@ -379,6 +421,7 @@ def online_testing(sess, model):
                                                            prev_cmd,
                                                            prev_last_cmd, 
                                                            prev_goal)
+            combined_cmd = last_cmd * flags.n_cmd_type + cmd
             env.last_target_point = copy.deepcopy(env.target_point)
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
@@ -399,11 +442,16 @@ def online_testing(sess, model):
                 env.CommandPublish(cmd)
                 env.PublishDemoRGBImage(demo_img_seq[0, max(demo_cnt-1, 0)], max(demo_cnt-1, 0))
 
-            local_near_goal = env.GetLocalPoint(near_goal)
-            action = env.Controller(local_near_goal, None, 1)
-
+            prev_one_hot_action = copy.deepcopy(one_hot_action)
             if not demo_flag:
-                action += (exploration_noise.noise() * np.asarray([flags.a_linear_range, flags.a_angular_range])*0.5)
+                q, gru_h_out = agent.ActionPredict([depth_stack], [[combined_cmd]], [prev_one_hot_action], gru_h_in)
+                action_index = np.argmax(q)
+                one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
+                one_hot_action[action_index] = 1
+                action = action_table[action_index]
+            else:
+                local_near_goal = env.GetLocalPoint(near_goal)
+                action = env.Controller(local_near_goal, None, 1)
 
             local_next_goal = env.GetLocalPoint(next_goal)
             env.PathPublish(local_next_goal)
@@ -423,16 +471,20 @@ def online_testing(sess, model):
 
             t += 1
             T += 1
+            if not demo_flag:
+                gru_h_in = gru_h_out
             loop_time.append(time.time() - start_time)
 
             rate.sleep()
             # print '{:.4f}'.format(time.time() - start_time)
 
         if not demo_flag:
-            print 'Episode:{:} | Steps:{:} | Reward:{:.2f} | T:{:}'.format(episode, 
-                                                                           t, 
-                                                                           total_reward, 
-                                                                           T)
+            info_shows = '| Episode:{:3d}'.format(episode) + \
+                         '| t:{:3d}'.format(t) + \
+                         '| T:{:5d}'.format(T) + \
+                         '| Reward:{:.3f}'.format(total_reward) + \
+                         '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
+            print info_shows
             episode += 1
         demo_flag = not demo_flag
 
@@ -461,7 +513,8 @@ def main():
                                                  loss_rate=flags.loss_rate,
                                                  stochastic_hard=flags.stochastic_hard)
         if flags.online_test:
-            online_testing(sess, model)
+            agent = DRQN(flags, sess, len(tf.trainable_variables()))
+            online_testing(sess, model, agent)
         elif flags.offline_test:
             offline_testing(sess, model)
         else:
