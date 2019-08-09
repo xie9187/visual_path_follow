@@ -81,8 +81,8 @@ class DynamicSumTree(object):
 
 class recurrent_memory(object):  # stored as ( s, a, r, s_ ) in SumTree
     epsilon = 0.01  # small amount to avoid zero priority
-    alpha = 0.6  # [0~1] convert the importance of TD error to priority
-    beta = 0.4  # importance-sampling, from initial value increasing to 1
+    alpha = 0.9  # [0~1] convert the importance of TD error to priority 0.6
+    beta = 0.6  # importance-sampling, from initial value increasing to 1 0.4
     beta_increment_per_sampling = 0.001
     abs_err_upper = 1.  # clipped abs error
 
