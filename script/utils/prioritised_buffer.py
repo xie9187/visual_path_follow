@@ -118,3 +118,4 @@ class Memory(object):  # stored as ( s, a, r, s_ ) in SumTree
             s, a, r, t, s_ = sample
             transition = np.hstack((s, a, [r, t], s_))
             self.store(transition)    # have high priority for newly arrived transition
+
