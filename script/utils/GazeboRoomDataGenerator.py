@@ -647,7 +647,7 @@ if __name__ == '__main__':
 
     arg = sys.argv[1]
     print 'data_path: ',  arg
-    # data_path = arg  
+    data_path = arg  
 
     # data_path = '~/Work/catkin_ws/src/data/vpf_data/'
     # data_path = os.path.join(data_path, machine_id)
