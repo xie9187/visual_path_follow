@@ -64,7 +64,7 @@ class Network(object):
             self.mask = tf.reshape(tf.sequence_mask(self.length, maxlen=self.max_step, dtype=tf.float32), [-1]) # b*l
             td_error = tf.square(y - selected_q) * self.mask # b*l
             if self.prioritised_replay:
-                td_error_abs = tf.abs(tf..reshape(td_error, [-1, self.max_step])) # b, l
+                td_error_abs = tf.abs(tf.reshape(td_error, [-1, self.max_step])) # b, l
                 max_q_error = tf.reduce_max(td_error_abs, axis=1) # b
                 mean_q_error = tf.reduce_sum(td_error_abs, axis=1)/tf.reduce_sum(self.mask, axis=1) # b
                 self.q_errors = 0.1*mean_q_error + 0.9* max_q_error # b
