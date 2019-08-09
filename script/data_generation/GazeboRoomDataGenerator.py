@@ -15,6 +15,7 @@ import pickle
 
 from AStar import pathFind
 from GazeboWorld import GazeboWorld
+from utils.ou_noise import OUNoise
 
 CWD = os.getcwd()
 
@@ -501,7 +502,8 @@ def DataGenerate(data_path, robot_name='robot1'):
     env = GazeboWorld('robot1')
     world = GridWorld()
     cv2.imwrite('./world/map.png', np.flipud(1-world.map)*255)
-
+    exploration_noise = OUNoise(action_dimension=2, 
+                                mu=0., theta=0.15/2, sigma=0.3/2)
     FileProcess()
     
     print "Env initialized"
@@ -619,7 +621,8 @@ def DataGenerate(data_path, robot_name='robot1'):
 
             local_near_goal = env.GetLocalPoint(near_goal)
             action = env.Controller(local_near_goal, None, 1)
-
+            action += (exploration_noise.noise() * np.asarray([0.3, np.pi/6]))
+            
             local_next_goal = env.GetLocalPoint(next_goal)
             env.PathPublish(local_next_goal)
 
@@ -642,38 +645,38 @@ def DataGenerate(data_path, robot_name='robot1'):
 if __name__ == '__main__':
     machine_id = socket.gethostname()
 
-    # arg = sys.argv[1]
-    # print 'data_path: ',  arg
+    arg = sys.argv[1]
+    print 'data_path: ',  arg
     # data_path = arg  
 
     # data_path = '~/Work/catkin_ws/src/data/vpf_data/'
     # data_path = os.path.join(data_path, machine_id)
 
-    # try:
-    #     os.stat(data_path)
-    # except:
-    #     os.makedirs(data_path)
+    try:
+        os.stat(data_path)
+    except:
+        os.makedirs(data_path)
 
-    # DataGenerate(data_path)
+    DataGenerate(data_path)
 
-    fig=plt.figure(figsize=(8, 6))
-    # env = GazeboWorld('robot1')
-    world = GridWorld()
-    world.RandomTableAndMap()
-    world.GetAugMap()
-    # obj_list = env.GetModelStates()
-    # obj_pose_dict = world.AllocateObject(obj_list)
-    # for name in obj_pose_dict:
-    #     env.SetObjectPose(name, obj_pose_dict[name])
-    # time.sleep(2.)
+    # fig=plt.figure(figsize=(8, 6))
+    # # env = GazeboWorld('robot1')
+    # world = GridWorld()
+    # world.RandomTableAndMap()
+    # world.GetAugMap()
+    # # obj_list = env.GetModelStates()
+    # # obj_pose_dict = world.AllocateObject(obj_list)
+    # # for name in obj_pose_dict:
+    # #     env.SetObjectPose(name, obj_pose_dict[name])
+    # # time.sleep(2.)
 
-    map_path, real_path, init_pose, _ = world.RandomPath(False)
-    # env.SetObjectPose('robot1', init_pose)
+    # map_path, real_path, init_pose, _ = world.RandomPath(False)
+    # # env.SetObjectPose('robot1', init_pose)
 
-    fig.add_subplot(2, 2, 1)
-    plt.imshow(world.table, origin='lower')
-    fig.add_subplot(2, 2, 2)
-    plt.imshow(world.aug_map, origin='lower')
-    fig.add_subplot(2, 2, 3)
-    plt.imshow(world.path_map, origin='lower')
-    plt.show()
+    # fig.add_subplot(2, 2, 1)
+    # plt.imshow(world.table, origin='lower')
+    # fig.add_subplot(2, 2, 2)
+    # plt.imshow(world.aug_map, origin='lower')
+    # fig.add_subplot(2, 2, 3)
+    # plt.imshow(world.path_map, origin='lower')
+    # plt.show()
