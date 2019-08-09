@@ -66,7 +66,7 @@ class Network(object):
             if self.prioritised_replay:
                 td_error_abs = tf.abs(tf.reshape(td_error, [-1, self.max_step])) # b, l
                 max_q_error = tf.reduce_max(td_error_abs, axis=1) # b
-                mean_q_error = tf.reduce_sum(td_error_abs, axis=1)/tf.reduce_sum(self.mask, axis=1) # b
+                mean_q_error = tf.reduce_sum(td_error_abs, axis=1)/tf.reduce_sum(tf.reshape(self.mask, [-1, self.max_step]), axis=1) # b
                 self.q_errors = 0.1*mean_q_error + 0.9* max_q_error # b
                 ISWeights = tf.reshape(tf.tile(self.ISWeights, [1, self.max_step]), [-1]) # b*l
                 td_error = td_error * ISWeights 
