@@ -15,7 +15,7 @@ import pickle
 
 from AStar import pathFind
 from GazeboWorld import GazeboWorld
-from utils.ou_noise import OUNoise
+from ou_noise import OUNoise
 
 CWD = os.getcwd()
 
@@ -622,7 +622,7 @@ def DataGenerate(data_path, robot_name='robot1'):
             local_near_goal = env.GetLocalPoint(near_goal)
             action = env.Controller(local_near_goal, None, 1)
             action += (exploration_noise.noise() * np.asarray([0.3, np.pi/6]))
-            
+
             local_next_goal = env.GetLocalPoint(next_goal)
             env.PathPublish(local_next_goal)
 
