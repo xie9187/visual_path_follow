@@ -374,7 +374,9 @@ def online_testing(sess, model, agent):
             demo_cnt = 0
         else:
             demo_append_flag = False
-        pred_cmd = 0
+        pred_cmd = 2
+        prev_pred_cmd = 2
+        last_cmd = 2
         action = [0., 0.]
         action_table = [[flags.a_linear_range, 0.],
                         [flags.a_linear_range, flags.a_angular_range],
@@ -421,7 +423,7 @@ def online_testing(sess, model, agent):
                                                            prev_cmd,
                                                            prev_last_cmd, 
                                                            prev_goal)
-            combined_cmd = last_cmd * flags.n_cmd_type + cmd
+            # combined_cmd = last_cmd * flags.n_cmd_type + cmd
             env.last_target_point = copy.deepcopy(env.target_point)
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
@@ -429,6 +431,7 @@ def online_testing(sess, model, agent):
 
             # precit cmd
             if not demo_flag:
+                prev_pred_cmd = pred_cmd
                 pred_cmd, att_pos = model.online_predict(input_demo_img=demo_img_seq, 
                                                         input_demo_cmd=demo_cmd_seq, 
                                                         input_img=np.expand_dims(rgb_image, axis=0), 
@@ -436,20 +439,22 @@ def online_testing(sess, model, agent):
                                                         input_prev_action=[action], 
                                                         demo_len=[demo_cnt], 
                                                         t=t)
+                if (prev_pred_cmd == 2 and pred_cmd != 2) or (prev_pred_cmd != 2 and pred_cmd == 2):
+                    last_cmd = prev_pred_cmd
+                combined_cmd = last_cmd * flags.n_cmd_type + cmd
                 env.CommandPublish(pred_cmd)
                 env.PublishDemoRGBImage(demo_img_seq[0, att_pos], att_pos)
-            else:
-                env.CommandPublish(cmd)
-                env.PublishDemoRGBImage(demo_img_seq[0, max(demo_cnt-1, 0)], max(demo_cnt-1, 0))
 
-            prev_one_hot_action = copy.deepcopy(one_hot_action)
-            if not demo_flag:
+                prev_one_hot_action = copy.deepcopy(one_hot_action)
                 q, gru_h_out = agent.ActionPredict([depth_stack], [[combined_cmd]], [prev_one_hot_action], gru_h_in)
                 action_index = np.argmax(q)
                 one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
                 one_hot_action[action_index] = 1
                 action = action_table[action_index]
             else:
+                env.CommandPublish(cmd)
+                env.PublishDemoRGBImage(demo_img_seq[0, max(demo_cnt-1, 0)], max(demo_cnt-1, 0))
+
                 local_near_goal = env.GetLocalPoint(near_goal)
                 action = env.Controller(local_near_goal, None, 1)
 

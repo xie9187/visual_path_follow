@@ -317,7 +317,7 @@ class Critic(object):
         action_vect = tf.matmul(input_action, embedding_w_action) + embedding_b_action
 
         input_vect = tf.concat([depth_vect, cmd_vect, prev_a_vect, action_vect], axis=1) 
-        rnn_cell = model_utils._lstm_cell(self.n_hidden, 1, name='gru_cell')
+        rnn_cell = model_utils._gru_cell(self.n_hidden, 1, name='gru_cell')
         shape = input_vect.get_shape().as_list()
         input_vect_reshape = tf.reshape(input_vect, [-1, self.max_step, shape[-1]])
         rnn_output, _ = tf.nn.dynamic_rnn(rnn_cell, 

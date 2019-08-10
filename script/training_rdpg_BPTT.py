@@ -47,11 +47,11 @@ flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
 
 # training param
-flag.DEFINE_integer('max_training_step', 2000000, 'max step.')
+flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "rdpg_bptt", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 100000, 'How many training steps to do per checkpoint.')
-flag.DEFINE_integer('buffer_size', 3000, 'The size of Buffer')
+flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('supervision', False, 'supervised learning')
@@ -89,9 +89,6 @@ def main(sess, robot_name='robot1'):
     print "  [*] printing trainable variables"
     for idx, v in enumerate(trainable_var):
         print "  var {:3}: {:15}   {}".format(idx, str(v.get_shape()), v.name)
-        # if not flags.test:    
-        #     with tf.name_scope(v.name.replace(':0', '')):
-        #         variable_summaries(v)
     if not flags.test:
         reward_ph = tf.placeholder(tf.float32, [], name='reward')
         q_ph = tf.placeholder(tf.float32, [], name='q_pred')
@@ -101,7 +98,10 @@ def main(sess, robot_name='robot1'):
         summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
     # model saver
-    saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
+    if not flags.test:
+        saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
+    else:
+        saver = tf.train.Saver(trainable_var)
     sess.run(tf.global_variables_initializer())
 
     if flags.test or flags.load_network:
@@ -119,6 +119,7 @@ def main(sess, robot_name='robot1'):
     # start learning
     training_start_time = time.time()
     timeout_flag = False
+    noise_annealing = 1.
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:
@@ -210,7 +211,8 @@ def main(sess, robot_name='robot1'):
 
             prev_a = copy.deepcopy(action)
             action, gru_h_out = agent.ActorPredict([depth_stack], [[combined_cmd]], [prev_a], gru_h_in)
-            action += (exploration_noise.noise() * np.asarray(agent.action_range))
+            if flags.test:
+                action += (exploration_noise.noise() * np.asarray(agent.action_range)) * noise_annealing
 
             if flags.supervision and (episode+1)%10 != 0:
                 local_near_goal = env.GetLocalPoint(near_goal)
@@ -228,8 +230,7 @@ def main(sess, robot_name='robot1'):
 
                 if len(agent.memory) > agent.batch_size and not flags.test:
                     training_step_start_time = time.time()
-                    for train_t in range(1):
-                        q = agent.Train()
+                    q = agent.Train()
                     training_step_time = time.time() - training_step_start_time
                     if t > 1:
                         summary = sess.run(merged, feed_dict={reward_ph: total_reward,
@@ -251,6 +252,7 @@ def main(sess, robot_name='robot1'):
 
             t += 1
             T += 1
+            noise_annealing -= 1/flags.max_training_step
             gru_h_in = gru_h_out
             rate.sleep()
             loop_time.append(time.time() - start_time)
