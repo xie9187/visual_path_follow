@@ -266,10 +266,6 @@ def img_normalisation(img_seq):
     
 def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, lag=20):
     start_time = time.time()
-    # # the padded demo image must be far from data images
-    # batch_demo_img_seq = np.ones([batch_size, max_demo_len, img_size[0], img_size[1], 3], dtype=np.float32) * (-1)
-    # # the padded demo command is "go forward"
-    # batch_demo_cmd_seq = np.ones([batch_size, max_demo_len, 1], dtype=np.int32) * 2
     batch_demo_img_seq = np.zeros([batch_size, max_demo_len, img_size[0], img_size[1], 3], dtype=np.float32)
     batch_demo_cmd_seq = np.zeros([batch_size, max_demo_len, 1], dtype=np.int32) 
 

@@ -331,7 +331,7 @@ def online_testing(sess, model, agent):
 
         if demo_flag:
             try:
-                table_route, map_route, real_route, init_pose = world.RandomPath()
+                table_route, map_route, real_route, init_pose = world.RandomPath(long_path=False)
                 timeout_flag = False
             except:
                 timeout_flag = True
@@ -376,6 +376,7 @@ def online_testing(sess, model, agent):
             demo_append_flag = False
         pred_cmd = 2
         prev_pred_cmd = 2
+        last_pred_cmd = 2
         last_cmd = 2
         action = [0., 0.]
         action_table = [[flags.a_linear_range, 0.],
@@ -395,7 +396,7 @@ def online_testing(sess, model, agent):
             start_time = time.time()
 
             terminate, result, reward = env.GetRewardAndTerminate(t, 
-                                                                  max_step=300, 
+                                                                  max_step=500, 
                                                                   len_route=len(dynamic_route))
             total_reward += reward
 
@@ -440,8 +441,8 @@ def online_testing(sess, model, agent):
                                                         demo_len=[demo_cnt], 
                                                         t=t)
                 if (prev_pred_cmd == 2 and pred_cmd != 2) or (prev_pred_cmd != 2 and pred_cmd == 2):
-                    last_cmd = prev_pred_cmd
-                combined_cmd = last_cmd * flags.n_cmd_type + cmd
+                    last_pred_cmd = prev_pred_cmd
+                combined_cmd = last_pred_cmd * flags.n_cmd_type + pred_cmd
                 env.CommandPublish(pred_cmd)
                 env.PublishDemoRGBImage(demo_img_seq[0, att_pos], att_pos)
 

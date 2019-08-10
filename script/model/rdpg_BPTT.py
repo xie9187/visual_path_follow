@@ -225,7 +225,7 @@ class Critic(object):
 
         self.sess = sess
         self.n_hidden = n_hidden
-        self.n_cmd_type = n_cmd_type**2
+        self.n_cmd_type = n_cmd_type
         self.learning_rate = learning_rate
         self.dim_img = dim_img
         self.dim_action = dim_action
