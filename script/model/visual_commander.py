@@ -323,7 +323,7 @@ class visual_commander(object):
         else:
             print 'attention mode: argmax hard'
             l2_norm = safe_norm(demo_img_vect - img_vect, axis=2) # b*l, n
-            norm_mask = tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.bool) # b, n
+            norm_mask = tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.float32) # b, n
             norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
             # never attend to padded images
             l2_norm += (1. - norm_mask) * 1000.
