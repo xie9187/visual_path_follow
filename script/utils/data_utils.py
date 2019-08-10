@@ -296,6 +296,9 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         raw_cmd_seq[raw_cmd_seq>=1] = 1
         raw_cmd_seq[np.fabs(raw_cmd_seq)<1] = 0
         raw_cmd_seq.astype(np.int32)
+        # random left and right cmd
+        if np.rando.rand() < 0.5:
+            raw_cmd_seq = -raw_cmd_seq
         
         # cmd_seq
         lagged_cmd_seq = raw_cmd_seq + 2
