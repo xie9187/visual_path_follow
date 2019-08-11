@@ -22,7 +22,7 @@ RANDOM_SEED = 1234
 flag = tf.app.flags
 
 # network param
-flag.DEFINE_integer('batch_size', 8, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-3, 'Critic learning rate.')
 flag.DEFINE_integer('max_epi_step', 200, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
