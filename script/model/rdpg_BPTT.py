@@ -32,7 +32,7 @@ class Actor(object):
         self.dim_emb = dim_emb
         self.dim_cmd = dim_cmd
         self.max_step = max_step
-        self.n_cmd_type = n_cmd_type**2
+        self.n_cmd_type = n_cmd_type
         self.tau = tau
         self.batch_size = batch_size
         self.gpu_num = gpu_num

@@ -210,7 +210,7 @@ def main(sess, robot_name='robot1'):
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
-            action, gru_h_out = agent.ActorPredict([depth_stack], [[combined_cmd]], [prev_a], gru_h_in)
+            action, gru_h_out = agent.ActorPredict([depth_stack], [[cmd]], [prev_a], gru_h_in)
             if flags.test:
                 action += (exploration_noise.noise() * np.asarray(agent.action_range)) * noise_annealing
 
