@@ -34,7 +34,7 @@ flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
 flag.DEFINE_integer('dim_depth_h', 64, 'input depth image height.') 
 flag.DEFINE_integer('dim_depth_w', 64, 'input depth image width.') 
 flag.DEFINE_integer('dim_depth_c', 3, 'input depth image channels.')
-flag.DEFINE_integer('dim_action', 5, 'dimension of action.')
+flag.DEFINE_integer('dim_action', 3, 'dimension of action.')
 flag.DEFINE_integer('dim_emb', 64, 'dimension of embedding.')
 flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
@@ -50,7 +50,7 @@ flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "drqn", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 100000, 'How many training steps to do per checkpoint.')
-flag.DEFINE_integer('buffer_size', 3000, 'The size of Buffer') #5000
+flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer') #5000
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
 flag.DEFINE_boolean('supervision', False, 'supervised learning')
@@ -130,7 +130,7 @@ def main(sess, robot_name='robot1'):
                         [flags.a_linear_range, -flags.a_angular_range/2],
                         [0., flags.a_angular_range],
                         [0., -flags.a_angular_range]]
-    elif flags.dim_action == 5:
+    else flags.dim_action == 5:
         action_table = [[flags.a_linear_range, 0.],
                         [flags.a_linear_range, flags.a_angular_range],
                         [flags.a_linear_range, -flags.a_angular_range],
