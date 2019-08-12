@@ -130,7 +130,7 @@ def main(sess, robot_name='robot1'):
                         [flags.a_linear_range, -flags.a_angular_range/2],
                         [0., flags.a_angular_range],
                         [0., -flags.a_angular_range]]
-    else flags.dim_action == 5:
+    else :
         action_table = [[flags.a_linear_range, 0.],
                         [flags.a_linear_range, flags.a_angular_range],
                         [flags.a_linear_range, -flags.a_angular_range],
