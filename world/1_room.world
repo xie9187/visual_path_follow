@@ -81,10 +81,10 @@
       <heading_deg>0</heading_deg>
     </spherical_coordinates>
     <state world_name='default'>
-      <sim_time>8940 222000000</sim_time>
-      <real_time>389 947863387</real_time>
-      <wall_time>1562780777 34785786</wall_time>
-      <iterations>155672</iterations>
+      <sim_time>18801 582000000</sim_time>
+      <real_time>179 260909466</real_time>
+      <wall_time>1565607008 432696392</wall_time>
+      <iterations>71641</iterations>
       <model name='10x10_4_colour_walls'>
         <pose frame=''>5 5 0 0 -0 0</pose>
         <scale>1 1 1</scale>
@@ -114,200 +114,200 @@
         </link>
       </model>
       <model name='6_Cube_StorageE_0'>
-        <pose frame=''>3.54149 5.51234 0 0 -0 0</pose>
+        <pose frame=''>1.57975 2.56292 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='Wall_0'>
-          <pose frame=''>3.54149 5.51234 0.01 0 -0 0</pose>
+          <pose frame=''>1.57975 2.56292 0.01 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='Wall_10'>
-          <pose frame=''>3.54149 5.51234 0.61 0 -0 0</pose>
+          <pose frame=''>1.57975 2.56292 0.61 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='Wall_12'>
-          <pose frame=''>3.54149 5.51234 0.4575 0 -0 0</pose>
+          <pose frame=''>1.57975 2.56292 0.4575 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='Wall_2'>
-          <pose frame=''>3.24349 5.51234 0.4575 0 -0 0</pose>
+          <pose frame=''>1.28175 2.56292 0.4575 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='Wall_4'>
-          <pose frame=''>3.83948 5.51234 0.4575 0 -0 0</pose>
+          <pose frame=''>1.87774 2.56292 0.4575 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='Wall_6'>
-          <pose frame=''>3.54149 5.51234 0.905 0 -0 0</pose>
+          <pose frame=''>1.57975 2.56292 0.905 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='Wall_8'>
-          <pose frame=''>3.54149 5.51234 0.305 0 -0 0</pose>
+          <pose frame=''>1.57975 2.56292 0.305 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='Floor_room1_0'>
-        <pose frame=''>4.9887 5.00482 0 0 -0 0</pose>
+        <pose frame=''>4.99995 4.9498 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='main'>
-          <pose frame=''>4.9887 5.00482 0.01 0 -0 0</pose>
+          <pose frame=''>4.99995 4.9498 0.01 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='bookshelf'>
-        <pose frame=''>8.5224 0.705137 0 0 -0 0</pose>
+        <pose frame=''>7.53701 1.76023 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
-          <pose frame=''>8.5224 0.705137 0 0 -0 0</pose>
+          <pose frame=''>7.53701 1.76023 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='bookshelf_large'>
-        <pose frame=''>5.96842 0.612002 0 0 -0 0</pose>
+        <pose frame=''>3.57651 2.95309 0 0 -0 1.55946</pose>
         <scale>1 1 1</scale>
         <link name='link_1'>
-          <pose frame=''>5.9683 0.611981 0 0 -0 0</pose>
+          <pose frame=''>3.57653 2.95297 0 0 -0 1.55946</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_2'>
-          <pose frame=''>5.96854 0.612023 0 0 -0 0</pose>
+          <pose frame=''>3.57649 2.95321 0 0 -0 1.55946</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='chair_1'>
-        <pose frame=''>4.45222 0.401317 0 0 -0 0</pose>
+        <pose frame=''>5.61328 0.440946 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_0'>
-          <pose frame=''>4.14548 0.1995 0.000751 0 -0 0</pose>
+          <pose frame=''>5.30654 0.239129 0.000751 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_1'>
-          <pose frame=''>4.15028 0.20063 -0.000751 0 -0 0</pose>
+          <pose frame=''>5.31134 0.240259 -0.000751 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='chair_2_0'>
-        <pose frame=''>3.47038 9.37325 0 0 -0 0</pose>
+        <pose frame=''>8.44812 9.41033 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_2'>
-          <pose frame=''>3.28993 9.14134 0 0 -0 0</pose>
+          <pose frame=''>8.26767 9.17842 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_3'>
-          <pose frame=''>3.28848 9.14022 0 0 -0 0</pose>
+          <pose frame=''>8.26622 9.1773 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='chair_set_1'>
-        <pose frame=''>2.47926 1.54008 0 0 -0 0</pose>
+        <pose frame=''>1.59654 0.559258 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_16'>
-          <pose frame=''>2.55143 1.65434 -0.032065 0 -0 1.57</pose>
+          <pose frame=''>1.66871 0.673517 -0.032065 0 -0 1.57</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_17'>
-          <pose frame=''>2.54845 1.66379 -0.032065 0 -0 1.57</pose>
+          <pose frame=''>1.66573 0.682967 -0.032065 0 -0 1.57</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_18'>
-          <pose frame=''>3.08623 1.17232 -0.032065 0 -0 0</pose>
+          <pose frame=''>2.20351 0.191497 -0.032065 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='chair_set_1_0'>
-        <pose frame=''>7.46611 4.50084 0 0 -0 0</pose>
+        <pose frame=''>5.56874 4.41565 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_16'>
-          <pose frame=''>7.53828 4.6151 -0.032065 0 -0 1.57</pose>
+          <pose frame=''>5.64091 4.52991 -0.032065 0 -0 1.57</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_17'>
-          <pose frame=''>7.5353 4.62454 -0.032065 0 -0 1.57</pose>
+          <pose frame=''>5.63793 4.53935 -0.032065 0 -0 1.57</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_18'>
-          <pose frame=''>8.07307 4.13307 -0.032065 0 -0 0</pose>
+          <pose frame=''>6.1757 4.04788 -0.032065 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='chair_set_3'>
-        <pose frame=''>1.54815 5.46495 0 0 -0 0</pose>
+        <pose frame=''>1.67658 6.37617 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_3'>
-          <pose frame=''>0.93561 5.0987 -0.060081 0 -0 1.13468</pose>
+          <pose frame=''>1.06404 6.00992 -0.060081 0 -0 1.13468</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_5'>
-          <pose frame=''>0.926391 5.2561 -0.060081 0 -0 0</pose>
+          <pose frame=''>1.05482 6.16732 -0.060081 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='chair_set_3_1'>
-        <pose frame=''>4.48458 7.4027 0 0 -0 0</pose>
+        <pose frame=''>5.60048 6.33412 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_3'>
-          <pose frame=''>3.87204 7.03645 -0.060081 0 -0 1.13468</pose>
+          <pose frame=''>4.98794 5.96787 -0.060081 0 -0 1.13468</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_5'>
-          <pose frame=''>3.86282 7.19384 -0.060081 0 -0 0</pose>
+          <pose frame=''>4.97872 6.12526 -0.060081 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='desk_brown'>
-        <pose frame=''>2.06519 8.36025 0 0 -0 0</pose>
+        <pose frame=''>1.1237 8.41559 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_22'>
-          <pose frame=''>1.12759 8.04755 0 0 -0 0</pose>
+          <pose frame=''>0.186107 8.10289 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -330,40 +330,40 @@
         </link>
       </model>
       <model name='desk_yellow'>
-        <pose frame=''>7.94959 7.54225 0 0 -0 0</pose>
+        <pose frame=''>8.98801 4.47517 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_22'>
-          <pose frame=''>7.04316 7.19653 0 0 -0 0</pose>
+          <pose frame=''>8.08158 4.12945 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='file_cabinet_large'>
-        <pose frame=''>1.45477 1.51429 0 0 -0 0</pose>
+        <pose frame=''>1.49209 1.56317 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_2'>
-          <pose frame=''>1.45477 1.51429 0 0 -0 0</pose>
+          <pose frame=''>1.49209 1.56317 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='file_cabinet_large_0'>
-        <pose frame=''>9.51282 5.4883 0 0 -0 0</pose>
+        <pose frame=''>8.38731 6.44366 0 0 -0 1.55374</pose>
         <scale>1 1 1</scale>
         <link name='link_2'>
-          <pose frame=''>9.51282 5.4883 0 0 -0 0</pose>
+          <pose frame=''>8.38731 6.44366 0 0 -0 1.55374</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='file_cabinet_small'>
-        <pose frame=''>9.4209 2.44398 0 0 -0 0</pose>
+        <pose frame=''>4.40762 4.41993 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_3'>
-          <pose frame=''>9.4209 2.44398 0 0 -0 0</pose>
+          <pose frame=''>4.40762 4.41993 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -380,440 +380,440 @@
         </link>
       </model>
       <model name='human_female_1_0'>
-        <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+        <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
         <scale>1 1 1</scale>
         <link name='link_0'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_1'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_10'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_11'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_12'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_2'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_3'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_4'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_5'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_6'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_7'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_8'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_9'>
-          <pose frame=''>8.47748 3.38596 0 0 -0 0</pose>
+          <pose frame=''>6.53796 0.737529 0 0 -0 0.033844</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='human_female_1_1'>
-        <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+        <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_0'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_1'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_10'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_11'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_12'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_2'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_3'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_4'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_5'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_6'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_7'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_8'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_9'>
-          <pose frame=''>5.47786 4.37122 0 0 -0 0</pose>
+          <pose frame=''>6.56702 4.4771 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='human_female_2_0'>
-        <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+        <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
         <scale>1 1 1</scale>
         <link name='link_0'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_1'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_10'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_11'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_12'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_2'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_3'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_4'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_5'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_6'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_7'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_8'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_9'>
-          <pose frame=''>9.46516 8.40361 0 0 -0 0</pose>
+          <pose frame=''>6.49759 7.507 0 0 -0 1.5577</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='human_female_3_0'>
-        <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+        <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_0'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_1'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_10'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_11'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_12'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_2'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_3'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_4'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_5'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_6'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_7'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_8'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_9'>
-          <pose frame=''>7.50592 5.46514 0 0 -0 0</pose>
+          <pose frame=''>3.58488 4.53276 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='human_female_4'>
-        <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+        <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
         <scale>1 1 1</scale>
         <link name='link_0'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_1'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_10'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_11'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_12'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_2'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_3'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_4'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_5'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_6'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_7'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_8'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_9'>
-          <pose frame=''>1.65728 7.44409 0 0 -0 0</pose>
+          <pose frame=''>8.36605 8.44983 0 0 -0 1.55299</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='mailbox_blue'>
-        <pose frame=''>3.4728 3.45343 0 0 -0 0</pose>
+        <pose frame=''>6.49424 8.53356 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_20'>
-          <pose frame=''>3.4728 3.45343 0 0 -0 0</pose>
+          <pose frame=''>6.49424 8.53356 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='mailbox_red'>
-        <pose frame=''>8.40814 2.40414 0 0 -0 0</pose>
+        <pose frame=''>8.28744 2.52364 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_20'>
-          <pose frame=''>8.40814 2.40414 0 0 -0 0</pose>
+          <pose frame=''>8.28744 2.52364 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='side_table_3'>
-        <pose frame=''>4.49756 4.37337 0 0 -0 0</pose>
+        <pose frame=''>3.52318 1.60835 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_9'>
-          <pose frame=''>4.49756 4.37337 0 0 -0 0</pose>
+          <pose frame=''>3.52318 1.60835 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -830,26 +830,42 @@
         </link>
       </model>
       <model name='side_table_set_2'>
-        <pose frame=''>5.44701 9.42498 0 0 -0 0</pose>
+        <pose frame=''>8.3367 7.37966 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_25'>
-          <pose frame=''>6.34123 8.62835 -0.029004 0 -0 0</pose>
+          <pose frame=''>9.23092 6.58303 -0.029004 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='sofa_set_2'>
-        <pose frame=''>1.9944 3.51848 0 0 -0 0</pose>
+        <pose frame=''>2.07787 4.51807 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_8'>
-          <pose frame=''>1.92751 2.98389 0 0 -0 0</pose>
+          <pose frame=''>2.01098 3.98348 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
         <link name='link_9'>
-          <pose frame=''>1.90949 2.98702 0 0 -0 0</pose>
+          <pose frame=''>1.99296 3.98661 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+      </model>
+      <model name='sofa_set_2_0'>
+        <pose frame=''>4.99343 8.52244 0 0 -0 0</pose>
+        <scale>1 1 1</scale>
+        <link name='link_8'>
+          <pose frame=''>4.92654 7.98785 0 0 -0 0</pose>
+          <velocity>0 0 0 0 -0 0</velocity>
+          <acceleration>0 0 0 0 -0 0</acceleration>
+          <wrench>0 0 0 0 -0 0</wrench>
+        </link>
+        <link name='link_9'>
+          <pose frame=''>4.90853 7.99098 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -884,30 +900,30 @@
         </link>
       </model>
       <model name='table_breakfast'>
-        <pose frame=''>5.49225 7.38967 0 0 -0 0</pose>
+        <pose frame=''>3.35924 8.36017 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_26'>
-          <pose frame=''>-0.19775 1.78967 0 0 -0 0</pose>
+          <pose frame=''>-2.33076 2.76017 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='vase_large_2_1'>
-        <pose frame=''>6.36413 5.51058 0 0 -0 0</pose>
+        <pose frame=''>8.34879 3.48223 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_31'>
-          <pose frame=''>6.36413 5.51058 0 0 -0 0</pose>
+          <pose frame=''>8.34879 3.48223 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
       <model name='yellow_bin'>
-        <pose frame=''>9.43708 9.58026 0 0 -0 0</pose>
+        <pose frame=''>6.60891 6.55481 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_2'>
-          <pose frame=''>9.13708 9.23026 0 0 -0 0</pose>
+          <pose frame=''>6.30891 6.20481 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -919,7 +935,7 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose frame=''>6.46136 4.69114 16.2203 1e-06 1.5538 1.56787</pose>
+        <pose frame=''>3.98153 5.11614 17.895 2.5e-05 1.5698 1.57989</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
@@ -7000,6 +7016,105 @@
       <static>1</static>
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>5.49225 7.38967 0 0 -0 0</pose>
+    </model>
+    <model name='sofa_set_2_0'>
+      <link name='link_8'>
+        <pose frame=''>-0.066892 -0.53459 0 0 -0 0</pose>
+        <visual name='visual'>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <geometry>
+            <mesh>
+              <uri>model://sofa_set_2/meshes/sofa_frame.dae</uri>
+              <scale>1 1 1</scale>
+            </mesh>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://sofa_set_2/materials/scripts</uri>
+              <uri>model://sofa_set_2/materials/textures</uri>
+              <name>sofa_set_2</name>
+            </script>
+          </material>
+          <cast_shadows>1</cast_shadows>
+          <transparency>0</transparency>
+        </visual>
+        <collision name='collision'>
+          <laser_retro>0</laser_retro>
+          <max_contacts>10</max_contacts>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <geometry>
+            <mesh>
+              <uri>model://sofa_set_2/meshes/sofa_frame.dae</uri>
+              <scale>1 1 1</scale>
+            </mesh>
+          </geometry>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <self_collide>0</self_collide>
+        <kinematic>0</kinematic>
+        <gravity>1</gravity>
+      </link>
+      <link name='link_9'>
+        <pose frame=''>-0.084902 -0.531458 0 0 -0 0</pose>
+        <visual name='visual'>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <geometry>
+            <mesh>
+              <uri>model://sofa_set_2/meshes/sofa_cushions.dae</uri>
+              <scale>1 1 1</scale>
+            </mesh>
+          </geometry>
+          <material>
+            <script>
+              <uri>model://sofa_set_2/materials/scripts</uri>
+              <uri>model://sofa_set_2/materials/textures</uri>
+              <name>sofa_set_2</name>
+            </script>
+          </material>
+          <cast_shadows>1</cast_shadows>
+          <transparency>0</transparency>
+        </visual>
+        <collision name='collision'>
+          <laser_retro>0</laser_retro>
+          <max_contacts>10</max_contacts>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <geometry>
+            <mesh>
+              <uri>model://sofa_set_2/meshes/sofa_cushions.dae</uri>
+              <scale>1 1 1</scale>
+            </mesh>
+          </geometry>
+          <surface>
+            <contact>
+              <ode/>
+            </contact>
+            <bounce/>
+            <friction>
+              <torsional>
+                <ode/>
+              </torsional>
+              <ode/>
+            </friction>
+          </surface>
+        </collision>
+        <self_collide>0</self_collide>
+        <kinematic>0</kinematic>
+        <gravity>1</gravity>
+      </link>
+      <static>1</static>
+      <allow_auto_disable>1</allow_auto_disable>
+      <pose frame=''>5.16886 9.46486 0 0 -0 0</pose>
     </model>
   </world>
 </sdf>

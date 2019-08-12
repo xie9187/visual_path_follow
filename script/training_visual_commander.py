@@ -13,8 +13,8 @@ import progressbar
 import rospy
 import matplotlib.pyplot as plt
 
-from data_generation.GazeboRoomDataGenerator import GridWorld, FileProcess
-from data_generation.GazeboWorld import GazeboWorld
+from utils.GazeboRoomDataGenerator import GridWorld, FileProcess
+from utils.GazeboWorld import GazeboWorld
 from utils.ou_noise import OUNoise
 from model.drqn import DRQN
 
@@ -49,6 +49,7 @@ flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
+flag.DEFINE_float('threshold', 0.8, 'prob threshold in commander')
 
 # rdqn param
 flag.DEFINE_integer('max_epi_step', 300, 'max step.')
@@ -317,17 +318,20 @@ def online_testing(sess, model, agent):
     demo_flag = True
     while not rospy.is_shutdown():
         time.sleep(2.)
-        if episode % 10 == 0 and demo_flag:
-            print 'randomising the environment'
-            env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
-            world.RandomTableAndMap()
-            world.GetAugMap()
-            obj_list = env.GetModelStates()
-            obj_pose_dict = world.AllocateObject(obj_list)
-            for name in obj_pose_dict:
-                env.SetObjectPose(name, obj_pose_dict[name])
-            time.sleep(1.)
-            print 'randomisation finished'
+        # if episode % 10 == 0 and demo_flag:
+        #     print 'randomising the environment'
+        #     env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
+        #     world.RandomTableAndMap()
+        #     world.GetAugMap()
+        #     obj_list = env.GetModelStates()
+        #     obj_pose_dict = world.AllocateObject(obj_list)
+        #     for name in obj_pose_dict:
+        #         env.SetObjectPose(name, obj_pose_dict[name])
+        #     time.sleep(1.)
+        #     print 'randomisation finished'
+        world.FixedTableAndMap()
+        world.GetAugMap()
+        obj_list = env.GetModelStates()
 
         if demo_flag:
             try:
@@ -382,8 +386,6 @@ def online_testing(sess, model, agent):
         action_table = [[flags.a_linear_range, 0.],
                         [flags.a_linear_range, flags.a_angular_range],
                         [flags.a_linear_range, -flags.a_angular_range],
-                        # [flags.a_linear_range, flags.a_angular_range/2],
-                        # [flags.a_linear_range, -flags.a_angular_range/2],
                         [0., flags.a_angular_range],
                         [0., -flags.a_angular_range]]
         depth_img = env.GetDepthImageObservation()
@@ -414,6 +416,16 @@ def online_testing(sess, model, agent):
                 env.LongPathPublish(dynamic_route)
             except:
                 pass
+
+            # fig=plt.figure(figsize=(8, 6))
+            # fig.add_subplot(2, 2, 1)
+            # plt.imshow(world.table, origin='lower')
+            # fig.add_subplot(2, 2, 2)
+            # plt.imshow(world.aug_map, origin='lower')
+            # fig.add_subplot(2, 2, 3)
+            # plt.imshow(world.path_map, origin='lower')
+            # plt.show()
+
             prev_cmd = cmd
             prev_last_cmd = last_cmd
             prev_goal = next_goal
@@ -424,6 +436,7 @@ def online_testing(sess, model, agent):
                                                            prev_cmd,
                                                            prev_last_cmd, 
                                                            prev_goal)
+
             # combined_cmd = last_cmd * flags.n_cmd_type + cmd
             env.last_target_point = copy.deepcopy(env.target_point)
             env.target_point = next_goal
@@ -434,12 +447,13 @@ def online_testing(sess, model, agent):
             if not demo_flag:
                 prev_pred_cmd = pred_cmd
                 pred_cmd, att_pos = model.online_predict(input_demo_img=demo_img_seq, 
-                                                        input_demo_cmd=demo_cmd_seq, 
-                                                        input_img=np.expand_dims(rgb_image, axis=0), 
-                                                        input_prev_cmd=[[pred_cmd]], 
-                                                        input_prev_action=[action], 
-                                                        demo_len=[demo_cnt], 
-                                                        t=t)
+                                                         input_demo_cmd=demo_cmd_seq, 
+                                                         input_img=np.expand_dims(rgb_image, axis=0), 
+                                                         input_prev_cmd=[[pred_cmd]], 
+                                                         input_prev_action=[action], 
+                                                         demo_len=[demo_cnt], 
+                                                         t=t,
+                                                         threshold=flags.threshold)
                 if (prev_pred_cmd == 2 and pred_cmd != 2) or (prev_pred_cmd != 2 and pred_cmd == 2):
                     last_pred_cmd = prev_pred_cmd
                 combined_cmd = last_pred_cmd * flags.n_cmd_type + pred_cmd
@@ -447,7 +461,7 @@ def online_testing(sess, model, agent):
                 env.PublishDemoRGBImage(demo_img_seq[0, att_pos], att_pos)
 
                 prev_one_hot_action = copy.deepcopy(one_hot_action)
-                q, gru_h_out = agent.ActionPredict([depth_stack], [[combined_cmd]], [prev_one_hot_action], gru_h_in)
+                q, gru_h_out = agent.ActionPredict([depth_stack], [[pred_cmd]], [prev_one_hot_action], gru_h_in)
                 action_index = np.argmax(q)
                 one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
                 one_hot_action[action_index] = 1
@@ -462,7 +476,7 @@ def online_testing(sess, model, agent):
             local_next_goal = env.GetLocalPoint(next_goal)
             env.PathPublish(local_next_goal)
             
-            if demo_flag and demo_append_flag and env.distance < 0.85:
+            if demo_flag and demo_append_flag and env.distance < 1.0:
                 demo_append_flag = False
                 demo_img_seq[0, demo_cnt, :, :, :] = rgb_image
                 if cmd == 2:
@@ -470,7 +484,7 @@ def online_testing(sess, model, agent):
                 demo_cmd_seq[0, demo_cnt, 0] = cmd
                 demo_cnt += 1
                 print 'append cmd: ', cmd
-            elif demo_flag and env.distance > 0.9:
+            elif demo_flag and env.distance > 1.05:
                 demo_append_flag = True
 
             env.SelfControl(action, [0.3, np.pi/6])

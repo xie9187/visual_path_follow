@@ -71,6 +71,27 @@ class GridWorld(object):
         # self.DrawHorizontalLine([12, 18], 2, 1)
         # self.DrawVerticalLine([2, 8], 15, 1)
 
+    def FixedTableAndMap(self):
+        self.table = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 1 ,0],
+                               [1, 1, 0, 1, 1, 1, 1, 0, 1, 0],
+                               [0, 0, 0, 0, 0, 0, 1, 0 ,1 ,0],
+                               [1, 1, 0, 1, 1, 1, 1, 0, 1, 0],
+                               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                               [0, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+                               [0, 0, 0, 1, 0, 0, 1, 0, 1, 0],
+                               [0, 1, 0, 1, 0, 1, 1, 0, 1, 0],
+                               [0, 1, 0, 1, 0, 0, 0, 1, 0, 0],
+                               [0, 1, 0, 0, 0, 1, 1, 0, 0, 0]], dtype=np.float32)
+        self.table = np.flipud(self.table)
+
+        self.map = np.zeros((self.map_size, self.map_size))
+        for x in xrange(self.table_size):
+            for y in xrange(self.table_size):
+                start_x = x * self.grid_size
+                start_y = y * self.grid_size
+                if self.table[y, x]:
+                    self.map[start_y:start_y+self.grid_size, start_x:start_x+self.grid_size] = 1
+
     def RandomTableAndMap(self):
 
         def random_walk(table, T):
@@ -425,6 +446,7 @@ class GridWorld(object):
     def GetCmdAndGoalSeq(self, path):
         cmd_seq = []
         goal_list = []
+        dir_seq = []
         for t in range(len(path) - 2):
             vect_start = [path[t+1][0] - path[t][0], path[t+1][1] - path[t][1]]
             dir_start = np.arctan2(vect_start[1], vect_start[0])
@@ -444,6 +466,28 @@ class GridWorld(object):
             if cmd == 1 or cmd == 3:
                 goal_idx += 1
             goal_seq.append(goal_list[goal_idx])
+
+        # slightly randomise command position
+        show_table = copy .deepcopy(self.table)
+        for t in xrange(len(path)-2):
+            if self.check_neighbour_zeros(self.table, path[t], 1) == 3 and \
+                cmd_seq[t+1] in [1, 3] and cmd_seq[t+2] not in [1, 3] and np.random.rand() < 0.5:
+                cmd_seq[t] = copy.deepcopy(cmd_seq[t+1])
+                cmd_seq[t+1] = copy.deepcopy(2)
+                print 1
+
+            show_table[path[t][1], path[t][0]] = cmd_seq[t]+5
+        show_table[path[-2][1], path[-2][0]] = cmd_seq[-2]+5
+        show_table[path[-1][1], path[-1][0]] = 9
+
+        
+        # fig=plt.figure(figsize=(8, 6))
+        # fig.add_subplot(1, 2, 1)
+        # plt.imshow(show_table, origin='lower')
+        # fig.add_subplot(1, 2, 2)
+        # plt.imshow(self.table, origin='lower')
+        # plt.show()        
+
         return cmd_seq, goal_seq
 
     def GetCmdAndGoal(self, table_path, cmd_seq, goal_seq, pose, prev_cmd=None, prev_last_cmd=None, prev_goal=None):
@@ -652,27 +696,29 @@ if __name__ == '__main__':
     # data_path = '~/Work/catkin_ws/src/data/vpf_data/'
     # data_path = os.path.join(data_path, machine_id)
 
-    try:
-        os.stat(data_path)
-    except:
-        os.makedirs(data_path)
+    # try:
+    #     os.stat(data_path)
+    # except:
+    #     os.makedirs(data_path)
 
-    DataGenerate(data_path)
+    # DataGenerate(data_path)
+
+    
+    # env = GazeboWorld('robot1')
+    world = GridWorld()
+    world.RandomTableAndMap()
+    world.GetAugMap()
+    # obj_list = env.GetModelStates()
+    # obj_pose_dict = world.AllocateObject(obj_list)
+    # for name in obj_pose_dict:
+    #     env.SetObjectPose(name, obj_pose_dict[name])
+    # time.sleep(2.)
+
+    table_path, map_path, real_path, init_pose = world.RandomPath(False)
+    _, _ = world.GetCmdAndGoalSeq(table_path)
+    # env.SetObjectPose('robot1', init_pose)
 
     # fig=plt.figure(figsize=(8, 6))
-    # # env = GazeboWorld('robot1')
-    # world = GridWorld()
-    # world.RandomTableAndMap()
-    # world.GetAugMap()
-    # # obj_list = env.GetModelStates()
-    # # obj_pose_dict = world.AllocateObject(obj_list)
-    # # for name in obj_pose_dict:
-    # #     env.SetObjectPose(name, obj_pose_dict[name])
-    # # time.sleep(2.)
-
-    # map_path, real_path, init_pose, _ = world.RandomPath(False)
-    # # env.SetObjectPose('robot1', init_pose)
-
     # fig.add_subplot(2, 2, 1)
     # plt.imshow(world.table, origin='lower')
     # fig.add_subplot(2, 2, 2)

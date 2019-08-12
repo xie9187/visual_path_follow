@@ -96,7 +96,8 @@ class visual_commander(object):
                           self.test_prev_action, 
                           self.rnn_h_in, 
                           self.demo_len]
-                self.predict, self.rnn_h_out, self.att_pos = self.testing_model(inputs)
+                # self.max_pos, self.max_prob, self.rnn_h_out, self.att_pos = self.testing_model(inputs)
+                self.predict, self.rnn_h_out, self.att_pos, self.max_prob = self.testing_model(inputs)
 
         self.rnn_h_out_real = np.zeros([1, n_hidden])
 
@@ -140,12 +141,12 @@ class visual_commander(object):
             demo_dense_seq, _ = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b*l, n_hidden
             att_pos = None
         elif self.demo_mode == 'hard':
-            demo_dense_seq, att_pos, att_logits, att_cmd_vect = self.process_demo_hard_att(input_demo_img, 
-                                                                                           input_demo_cmd, 
-                                                                                           img_vect, 
-                                                                                           False, 
-                                                                                           demo_len,
-                                                                                           self.stochastic_hard)
+            demo_dense_seq, att_pos, att_logits, prob = self.process_demo_hard_att(input_demo_img, 
+                                                                                   input_demo_cmd, 
+                                                                                   img_vect, 
+                                                                                   False, 
+                                                                                   demo_len,
+                                                                                   self.stochastic_hard)
         # post-attention inputs
         # dropouts
         demo_dense_seq = tf.nn.dropout(demo_dense_seq, rate=1.-self.keep_prob)
@@ -181,19 +182,6 @@ class visual_commander(object):
             dense_output = model_utils.dense_layer(inputs_dense, self.n_hidden, scope='dense') # b*l, n_hidden
             # output = tf.reshape(dense_output, [-1, 1, self.n_hidden]) # b*l, 1, dim_emb
             logits = model_utils.dense_layer(dense_output, self.n_cmd_type, scope='logits', activation=None) # b*l, n_cmd_type
-
-        # forward_vect = tf.gather(self.embedding_cmd, indices=2) # dim_emb
-        # forward_vect = tf.ones([self.batch_size/self.gpu_num*self.max_step, 1]) * tf.expand_dims(forward_vect, axis=0) # b*l, dim_emb
-        # options_vect = tf.stack([att_cmd_vect, forward_vect], axis=2) # b*l, dim_emb, 2
-        # logits = tf.reshape(tf.matmul(output, options_vect), [-1, 2]) # b*l, 2
-        # binary_pred = tf.argmax(logits, axis=1, output_type=tf.int32) # b*l
-        # forward_cmds = tf.ones_like(binary_pred)*2 # b*l
-        # att_cmds = tf.gather(tf.range(self.n_cmd_type), att_pos) # b*l
-        # option_cmds = tf.stack([att_cmds, forward_cmds], axis=1) # b*l, 2
-        # pred_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.int32) # b, l
-        # pred = tf.reshape(tf.gather(tf.reshape(option_cmds, [-1]),
-        #                             binary_pred+tf.range(self.batch_size/self.gpu_num*self.max_step, dtype=binary_pred.dtype)*2),
-        #                   [-1, self.max_step]) # b, l
         
         # predict  
         pred_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=tf.int32) # b, l
@@ -242,13 +230,12 @@ class visual_commander(object):
         if self.demo_mode == 'sum':
             _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
         elif self.demo_mode == 'hard':
-            demo_dense, att_pos, att_logits, _ = self.process_demo_hard_att(input_demo_img, 
-                                                                            input_demo_cmd, 
-                                                                            img_vect, 
-                                                                            True, 
-                                                                            demo_len,
-                                                                            self.stochastic_hard)
-
+            demo_dense, att_pos, att_logits, prob = self.process_demo_hard_att(input_demo_img, 
+                                                                                  input_demo_cmd, 
+                                                                                  img_vect, 
+                                                                                  True, 
+                                                                                  demo_len,
+                                                                                  self.stochastic_hard)
         if self.inputs_num <= 2:
             all_inputs = demo_dense
         elif self.inputs_num == 3:
@@ -267,10 +254,17 @@ class visual_commander(object):
             dense = model_utils.dense_layer(inputs_dense, self.n_hidden/2, scope='dense') # b, n_hidden/2
             logits = model_utils.dense_layer(dense, self.n_cmd_type, scope='logits', activation=None) # b, n_cmd_type
             rnn_h_out = rnn_h_in
-
         predict = tf.argmax(logits, axis=1) # b
 
-        return predict, rnn_h_out, att_pos
+        max_prob = tf.reduce_max(prob) # b
+
+        return predict, rnn_h_out, att_pos, max_prob
+
+        # # binary filtering after attention
+        # max_pos = tf.argmax(prob, axis=1) # b
+        # max_prob = tf.reduce_max(prob) # b
+        # rnn_h_out = rnn_h_in
+        # return max_pos, max_prob, rnn_h_out, att_pos
 
 
     def encode_image(self, inputs):
@@ -324,11 +318,17 @@ class visual_commander(object):
             print 'attention mode: argmax hard'
             l2_norm = safe_norm(demo_img_vect - img_vect, axis=2) # b*l, n
             norm_mask = tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.float32) # b, n
-            norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
-            logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
-            masked_prob = tf.nn.softmax(-l2_norm)*norm_mask
-            att_pos = tf.argmax(masked_prob, axis=1) # b*l
-        self.l2_norm = l2_norm
+            if not test_flag:
+                norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
+            # logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
+            # masked_prob = tf.nn.softmax(-l2_norm)*norm_mask
+            masked_prob = tf.exp(-l2_norm)*norm_mask / tf.tile(tf.reduce_sum(tf.exp(-l2_norm)*norm_mask, 
+                                                                             axis=1, 
+                                                                             keepdims=True), 
+                                                               [1, self.max_n_demo]) # b*l, n
+            logits = tf.log(masked_prob + 1e-12)
+            att_pos = tf.argmax(logits, axis=1) # b*l
+        self.l2_norm = masked_prob
 
         shape = tf.shape(img_vect)
         coords = tf.stack([tf.range(shape[0]), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
@@ -346,47 +346,7 @@ class visual_commander(object):
             demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
         demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
 
-        return demo_dense, att_pos, logits, attended_demo_cmd_vect
-
-    def process_demo_semi_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag):
-        print 'attention mode: semi-hard'
-        input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
-        demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
-        shape = demo_img_vect.get_shape().as_list()
-        demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b, n, dim_img_feat
-        if not test_flag:
-            demo_img_vect = tf.tile(tf.expand_dims(demo_img_vect, axis=1), [1, self.max_step, 1, 1]) # b, l, n, dim_img_feat
-            demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b*l, n, dim_img_feat
-        img_vect = tf.tile(tf.expand_dims(img_vect, axis=1), [1, self.max_n_demo, 1]) # b*l, n, dim_img_feat
-        l2_norm = tf.norm(demo_img_vect - img_vect, axis=2) # b*l, n
-        self.l2_norm = tf.reshape(l2_norm, [-1, self.max_step, self.max_n_demo])
-        inverse_l2_norm = 1./l2_norm # b*l, n
-        # soft-argmax
-        beta = 10.
-        batch_size = tf.shape(img_vect)[0]/self.max_step
-        indicies = tf.tile(tf.expand_dims(tf.range(self.max_n_demo, dtype=tf.float32), axis=1), 
-                           [batch_size*self.max_step, 1]) # b*l, n
-        a = tf.exp(inverse_l2_norm) # b*l, n
-        b = tf.tile(tf.reduce_sum(tf.exp(inverse_l2_norm), axis=1, keepdims=True), [1, self.max_n_demo]) # b*l, n
-        expect = tf.reduce_sum(a/b, axis=1) # b*l
-        att_pos = tf.round(expect)
-
-        coords = tf.stack([tf.range(batch_size*self.max_step), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
-        attended_demo_img_vect = tf.gather_nd(demo_img_vect, coords) # b*l,  dim_img_feat 
-
-        demo_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_demo_cmd), [-1, self.max_n_demo, self.dim_emb]) # b, n, dim_emb
-        if not test_flag:
-            demo_cmd_vect = tf.tile(tf.expand_dims(demo_cmd_vect, axis=1), [1, self.max_step, 1, 1]) # b, l, n, dim_emb
-            demo_cmd_vect = tf.reshape(demo_cmd_vect, [-1, self.max_n_demo, self.dim_emb]) # b*l, n, dim_emb
-        attended_demo_cmd_vect = tf.gather_nd(demo_img_vect, coords) # b*l, dim_emb
-
-        if self.inputs_num == 1:
-            demo_vect = attended_demo_cmd_vect # b*l, dim_emb
-        else:
-            demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
-        demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
-
-        return demo_dense, att_pos
+        return demo_dense, att_pos, logits, masked_prob # l2_norm+(1.-norm_mask)*100.
 
     def train(self, data):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
@@ -424,19 +384,23 @@ class visual_commander(object):
         else:
             return [], []
 
-    def online_predict(self, input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, demo_len, t):
+    def online_predict(self, input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, demo_len, t, threshold):
         if t == 0:
             rnn_h_in = np.zeros([1, self.n_hidden], np.float32)
         else:
             rnn_h_in = copy.deepcopy(self.rnn_h_out_real)
 
-        predict, self.rnn_h_out_real, att_pos = self.sess.run([self.predict, self.rnn_h_out, self.att_pos], feed_dict={
-                                                              self.input_demo_img: data_utils.img_normalisation(copy.deepcopy(input_demo_img)),
-                                                              self.input_demo_cmd: input_demo_cmd,
-                                                              self.test_img: data_utils.img_normalisation(copy.deepcopy(input_img)),
-                                                              self.test_prev_cmd: input_prev_cmd,
-                                                              self.test_prev_action: input_prev_action,
-                                                              self.demo_len: demo_len,
-                                                              self.rnn_h_in: rnn_h_in
-                                                              })
+        predict, self.rnn_h_out_real, att_pos, max_prob = self.sess.run([self.predict, self.rnn_h_out, self.att_pos, self.max_prob], feed_dict={
+                                                                         self.input_demo_img: data_utils.img_normalisation(copy.deepcopy(input_demo_img)),
+                                                                         self.input_demo_cmd: input_demo_cmd,
+                                                                         self.test_img: data_utils.img_normalisation(copy.deepcopy(input_img)),
+                                                                         self.test_prev_cmd: input_prev_cmd,
+                                                                         self.test_prev_action: input_prev_action,
+                                                                         self.demo_len: demo_len,
+                                                                         self.rnn_h_in: rnn_h_in
+                                                                         })
+        if max_prob > threshold:
+            predict = [input_demo_cmd[0, att_pos[0], 0]]
+        elif max_prob < threshold/2:
+            predict = [2]
         return predict[0], att_pos[0]
