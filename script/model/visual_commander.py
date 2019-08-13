@@ -96,8 +96,8 @@ class visual_commander(object):
                           self.test_prev_action, 
                           self.rnn_h_in, 
                           self.demo_len]
-                # self.max_pos, self.max_prob, self.rnn_h_out, self.att_pos = self.testing_model(inputs)
-                self.predict, self.rnn_h_out, self.att_pos, self.max_prob = self.testing_model(inputs)
+
+                self.predict, self.rnn_h_out, self.att_pos, self.max_prob, self.min_norm = self.testing_model(inputs)
 
         self.rnn_h_out_real = np.zeros([1, n_hidden])
 
@@ -141,7 +141,7 @@ class visual_commander(object):
             demo_dense_seq, _ = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b*l, n_hidden
             att_pos = None
         elif self.demo_mode == 'hard':
-            demo_dense_seq, att_pos, att_logits, prob = self.process_demo_hard_att(input_demo_img, 
+            demo_dense_seq, att_pos, att_logits, prob, _ = self.process_demo_hard_att(input_demo_img, 
                                                                                    input_demo_cmd, 
                                                                                    img_vect, 
                                                                                    False, 
@@ -149,10 +149,11 @@ class visual_commander(object):
                                                                                    self.stochastic_hard)
         # post-attention inputs
         # dropouts
-        demo_dense_seq = tf.nn.dropout(demo_dense_seq, rate=1.-self.keep_prob)
-        img_vect = tf.nn.dropout(img_vect, rate=1.-self.keep_prob)
-        prev_cmd_vect = tf.nn.dropout(prev_cmd_vect, rate=1.-self.keep_prob)
-        prev_a_vect = tf.nn.dropout(prev_a_vect, rate=1.-self.keep_prob)
+        if not self.test:
+            demo_dense_seq = tf.nn.dropout(demo_dense_seq, rate=1.-self.keep_prob)
+            img_vect = tf.nn.dropout(img_vect, rate=1.-self.keep_prob)
+            prev_cmd_vect = tf.nn.dropout(prev_cmd_vect, rate=1.-self.keep_prob)
+            prev_a_vect = tf.nn.dropout(prev_a_vect, rate=1.-self.keep_prob)
 
         if self.inputs_num <= 2:
             all_inputs = demo_dense_seq
@@ -230,7 +231,7 @@ class visual_commander(object):
         if self.demo_mode == 'sum':
             _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
         elif self.demo_mode == 'hard':
-            demo_dense, att_pos, att_logits, prob = self.process_demo_hard_att(input_demo_img, 
+            demo_dense, att_pos, att_logits, prob, l2_norm = self.process_demo_hard_att(input_demo_img, 
                                                                                   input_demo_cmd, 
                                                                                   img_vect, 
                                                                                   True, 
@@ -257,8 +258,8 @@ class visual_commander(object):
         predict = tf.argmax(logits, axis=1) # b
 
         max_prob = tf.reduce_max(prob) # b
-
-        return predict, rnn_h_out, att_pos, max_prob
+        min_norm = tf.reduce_min(l2_norm)
+        return predict, rnn_h_out, att_pos, max_prob, min_norm
 
         # # binary filtering after attention
         # max_pos = tf.argmax(prob, axis=1) # b
@@ -326,7 +327,14 @@ class visual_commander(object):
                                                                              axis=1, 
                                                                              keepdims=True), 
                                                                [1, self.max_n_demo]) # b*l, n
-            logits = tf.log(masked_prob + 1e-12)
+            logits = tf.log(masked_prob + 1e-12) # b*l, n
+            # if test_flag:
+            #     coords = tf.stack([tf.range(1), tf.cast(curr_att, dtype=tf.int32)], axis=1) # 1, 2
+            #     curr_logit = tf.gather_nd(logits, coords) # 1, 1
+            #     coords = tf.stack([tf.range(1), tf.cast(curr_att+1, dtype=tf.int32)], axis=1) # 1, 2
+            #     next_logit = tf.gather_nd(logits, coords) # 1, 1
+            # else:
+            #     att_pos = tf.argmax(logits, axis=1) # b*l
             att_pos = tf.argmax(logits, axis=1) # b*l
         self.l2_norm = masked_prob
 
@@ -346,7 +354,7 @@ class visual_commander(object):
             demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
         demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
 
-        return demo_dense, att_pos, logits, masked_prob # l2_norm+(1.-norm_mask)*100.
+        return demo_dense, att_pos, logits, masked_prob, l2_norm+(1.-norm_mask)*100.
 
     def train(self, data):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
@@ -390,7 +398,11 @@ class visual_commander(object):
         else:
             rnn_h_in = copy.deepcopy(self.rnn_h_out_real)
 
-        predict, self.rnn_h_out_real, att_pos, max_prob = self.sess.run([self.predict, self.rnn_h_out, self.att_pos, self.max_prob], feed_dict={
+        predict, self.rnn_h_out_real, att_pos, max_prob, min_norm = self.sess.run([self.predict, 
+                                                                         self.rnn_h_out, 
+                                                                         self.att_pos, 
+                                                                         self.max_prob,
+                                                                         self.min_norm], feed_dict={
                                                                          self.input_demo_img: data_utils.img_normalisation(copy.deepcopy(input_demo_img)),
                                                                          self.input_demo_cmd: input_demo_cmd,
                                                                          self.test_img: data_utils.img_normalisation(copy.deepcopy(input_img)),
@@ -399,8 +411,14 @@ class visual_commander(object):
                                                                          self.demo_len: demo_len,
                                                                          self.rnn_h_in: rnn_h_in
                                                                          })
-        if max_prob > threshold:
+        
+        if max_prob > threshold or min_norm < 4.:
             predict = [input_demo_cmd[0, att_pos[0], 0]]
-        elif max_prob < threshold/2:
+        elif max_prob < 0.3:
             predict = [2]
+        info_shows = '| max_prob:{:.3f}'.format(max_prob) + \
+                     '| min_norm:{:3.3f}'.format(min_norm) + \
+                     '| predict:{:1d}'.format(predict[0]) + \
+                     '| att_pos: {:1d}'.format(att_pos[0])
+        print info_shows, '| input_demo_cmd:', input_demo_cmd[0].tolist()[:demo_len[0]]
         return predict[0], att_pos[0]

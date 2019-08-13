@@ -328,7 +328,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
 
         n = 0
         for start_idx, end_idx in zip(start_indicies, end_indicies):
-            demo_idx = max((start_idx+end_idx)/2, 0)
+            demo_idx = max((start_idx*2/10+end_idx*8/10), 0)
             batch_demo_indicies[i].append(demo_idx)
             batch_demo_img_seq[i, n, :, :, :] = img_seq[demo_idx, :, :, :]
             batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[demo_idx, :]

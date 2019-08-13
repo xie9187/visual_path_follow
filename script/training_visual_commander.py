@@ -233,7 +233,6 @@ def offline_testing(sess, model):
         fig, axes = plt.subplots(batch_size/2, 2, sharex=True, figsize=(8,12))
         batch_data = data_utils.get_a_batch(data, batch_id*batch_size, batch_size, max_step, img_size, max_n_demo)
         acc, loss, pred_cmd, att_pos, l2_norm = model.valid(batch_data)
-        l2_norm = np.sqrt(l2_norm**2 - 1e-12)
         for i in xrange(batch_size):
             demo_img_seq = batch_data[0][i, :, :, :]
             demo_cmd_seq = batch_data[1][i, :]
@@ -318,17 +317,6 @@ def online_testing(sess, model, agent):
     demo_flag = True
     while not rospy.is_shutdown():
         time.sleep(2.)
-        # if episode % 10 == 0 and demo_flag:
-        #     print 'randomising the environment'
-        #     env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
-        #     world.RandomTableAndMap()
-        #     world.GetAugMap()
-        #     obj_list = env.GetModelStates()
-        #     obj_pose_dict = world.AllocateObject(obj_list)
-        #     for name in obj_pose_dict:
-        #         env.SetObjectPose(name, obj_pose_dict[name])
-        #     time.sleep(1.)
-        #     print 'randomisation finished'
         world.FixedTableAndMap()
         world.GetAugMap()
         obj_list = env.GetModelStates()
@@ -442,7 +430,8 @@ def online_testing(sess, model, agent):
             env.target_point = next_goal
             local_next_goal = env.Global2Local([next_goal], pose)[0]
             env.PathPublish(local_next_goal)
-
+            if cmd in [1, 3]:
+                last_turn_cmd = cmd
             # precit cmd
             if not demo_flag:
                 prev_pred_cmd = pred_cmd
@@ -454,6 +443,8 @@ def online_testing(sess, model, agent):
                                                          demo_len=[demo_cnt], 
                                                          t=t,
                                                          threshold=flags.threshold)
+                if pred_cmd == 0:
+                    pred_cmd = 2 
                 if (prev_pred_cmd == 2 and pred_cmd != 2) or (prev_pred_cmd != 2 and pred_cmd == 2):
                     last_pred_cmd = prev_pred_cmd
                 combined_cmd = last_pred_cmd * flags.n_cmd_type + pred_cmd
@@ -479,11 +470,9 @@ def online_testing(sess, model, agent):
             if demo_flag and demo_append_flag and env.distance < 1.0:
                 demo_append_flag = False
                 demo_img_seq[0, demo_cnt, :, :, :] = rgb_image
-                if cmd == 2:
-                    cmd = 0
-                demo_cmd_seq[0, demo_cnt, 0] = cmd
+                demo_cmd_seq[0, demo_cnt, 0] = int(world.cmd_list[demo_cnt])
+                print 'append cmd: ', int(world.cmd_list[demo_cnt])
                 demo_cnt += 1
-                print 'append cmd: ', cmd
             elif demo_flag and env.distance > 1.05:
                 demo_append_flag = True
 

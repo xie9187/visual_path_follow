@@ -447,6 +447,7 @@ class GridWorld(object):
         cmd_seq = []
         goal_list = []
         dir_seq = []
+        self.cmd_list = []
         for t in range(len(path) - 2):
             vect_start = [path[t+1][0] - path[t][0], path[t+1][1] - path[t][1]]
             dir_start = np.arctan2(vect_start[1], vect_start[0])
@@ -456,8 +457,10 @@ class GridWorld(object):
             cmd = direction + 2
             cmd_seq.append(int(cmd))
             if cmd == 1 or cmd == 3:
+                self.cmd_list.append(cmd)
                 goal_list.append(self.Map2Real(self.Table2Map(path[t+1])))
         cmd_seq = cmd_seq + [2, 0]
+        self.cmd_list.append(0)
         goal_list.append(self.Map2Real(self.Table2Map(path[-1])))
 
         goal_idx = 0
