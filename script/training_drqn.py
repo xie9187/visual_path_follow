@@ -122,20 +122,11 @@ def main(sess, robot_name='robot1'):
     training_start_time = time.time()
     timeout_flag = False
     epsilon = flags.init_epsilon
-    if flags.dim_action == 7:
-        action_table = [[flags.a_linear_range, 0.],
-                        [flags.a_linear_range, flags.a_angular_range],
-                        [flags.a_linear_range, -flags.a_angular_range],
-                        [flags.a_linear_range, flags.a_angular_range/2],
-                        [flags.a_linear_range, -flags.a_angular_range/2],
-                        [0., flags.a_angular_range],
-                        [0., -flags.a_angular_range]]
-    else :
-        action_table = [[flags.a_linear_range, 0.],
-                        [flags.a_linear_range, flags.a_angular_range],
-                        [flags.a_linear_range, -flags.a_angular_range],
-                        [0., flags.a_angular_range],
-                        [0., -flags.a_angular_range]]
+    action_table = [[flags.a_linear_range, 0.],
+                    [flags.a_linear_range/2, flags.a_angular_range],
+                    [flags.a_linear_range/2, -flags.a_angular_range],
+                    [0., flags.a_angular_range],
+                    [0., -flags.a_angular_range]]
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:

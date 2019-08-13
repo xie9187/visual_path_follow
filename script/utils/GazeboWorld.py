@@ -396,7 +396,7 @@ class GazeboWorld():
                     delta = 0.
                 else:
                     delta = self.pre_distance - self.distance
-            reward = delta * np.cos(w)
+            reward = delta
         else:
             reward = v * np.cos(w) / 5.
 
