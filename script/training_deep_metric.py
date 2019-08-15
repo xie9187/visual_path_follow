@@ -159,7 +159,7 @@ def training(sess, model):
                                               test_acc_ph: acc_valid
                                               })
         summary_writer.add_summary(summary, epoch)
-        if flags.save_model and (epoch+1)%20 == 0:
+        if flags.save_model and (epoch+1)%10 == 0:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
 
             dist_name = os.path.join(model_dir, 'epoch_{:d}_posi_dist.csv'.format(epoch))
