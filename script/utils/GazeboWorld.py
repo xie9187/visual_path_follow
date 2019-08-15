@@ -360,7 +360,7 @@ class GazeboWorld():
         self.cmd_vel.publish(Twist())
         rospy.sleep(1)
 
-    def GetRewardAndTerminate(self, t, delta=None, max_step=100, OA_mode=False, len_route=0):
+    def GetRewardAndTerminate(self, t, delta=None, max_step=100, OA_mode=False, len_route=0, test=False):
         terminate = False
         reset = False
         laser_scan = self.GetLaserObservation()
@@ -370,7 +370,8 @@ class GazeboWorld():
 
         result = 0
 
-        if laser_min < 0.27 / 5.6 - 0.5:
+        safe_dist = 0.15 if test else 0.27
+        if laser_min < safe_dist / 5.6 - 0.5:
             self.stop_counter += 1
         else:
             self.stop_counter = 0

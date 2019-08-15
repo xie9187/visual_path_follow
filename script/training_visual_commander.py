@@ -59,7 +59,7 @@ flag.DEFINE_boolean('dueling', False, 'dueling network')
 flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
 flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer') #5000
 flag.DEFINE_string('controller_model_name', 'drqn', 'Name of the model.')
-flag.DEFINE_integer('dim_action', 5, 'dimension of action.')
+flag.DEFINE_integer('dim_action', 3, 'dimension of action.')
 flag.DEFINE_boolean('test', True, 'whether to test.')
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 
@@ -315,6 +315,8 @@ def online_testing(sess, model, agent):
     episode = 0
     time.sleep(2.)
     demo_flag = True
+    success_nums = np.zeros([10], dtype=np.float32)
+    demo_lens = np.zeros([10], dtype=np.float32)
     while not rospy.is_shutdown():
         time.sleep(2.)
         world.FixedTableAndMap()
@@ -335,7 +337,7 @@ def online_testing(sess, model, agent):
         dynamic_route = copy.deepcopy(real_route)
         time.sleep(0.1)
 
-        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
+        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route, test=True)
         pose = env.GetSelfStateGT()
         cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, 2, [0., 0.])
         try:
@@ -372,8 +374,8 @@ def online_testing(sess, model, agent):
         last_cmd = 2
         action = [0., 0.]
         action_table = [[flags.a_linear_range, 0.],
-                        [flags.a_linear_range, flags.a_angular_range],
-                        [flags.a_linear_range, -flags.a_angular_range],
+                        [flags.a_linear_range/2, flags.a_angular_range],
+                        [flags.a_linear_range/2, -flags.a_angular_range],
                         [0., flags.a_angular_range],
                         [0., -flags.a_angular_range]]
         depth_img = env.GetDepthImageObservation()
@@ -387,9 +389,9 @@ def online_testing(sess, model, agent):
 
             terminate, result, reward = env.GetRewardAndTerminate(t, 
                                                                   max_step=500, 
-                                                                  len_route=len(dynamic_route))
+                                                                  len_route=len(dynamic_route),
+                                                                  test=True)
             total_reward += reward
-
             if result >= 1:
                 break
             
@@ -488,14 +490,25 @@ def online_testing(sess, model, agent):
             # print '{:.4f}'.format(time.time() - start_time)
 
         if not demo_flag:
+            demo_cnt = min(demo_cnt, 10)
+            demo_lens[demo_cnt-1] += 1
+            if result == 2:
+                success_nums[demo_cnt-1] += 1
             info_shows = '| Episode:{:3d}'.format(episode) + \
                          '| t:{:3d}'.format(t) + \
                          '| T:{:5d}'.format(T) + \
                          '| Reward:{:.3f}'.format(total_reward) + \
-                         '| LoopTime(s): {:.3f}'.format(np.mean(loop_time))
+                         '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
+                         '| SR: {:.3f}'.format(np.sum(success_nums)/(episode+1))
             print info_shows
             episode += 1
+            if episode == 1000:
+                break
         demo_flag = not demo_flag
+    print 'success num distributs: ', success_nums
+    print 'demo length distributs: ', demo_lens
+    demo_lens[demo_lens==0] = 1e-12
+    print 'success rate distributs: ', success_nums/demo_lens
 
 def main():
     config = tf.ConfigProto(allow_soft_placement=True)

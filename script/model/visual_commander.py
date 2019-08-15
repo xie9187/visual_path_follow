@@ -412,13 +412,13 @@ class visual_commander(object):
                                                                          self.rnn_h_in: rnn_h_in
                                                                          })
         
-        if max_prob > threshold or min_norm < 4.:
-            predict = [input_demo_cmd[0, att_pos[0], 0]]
-        elif max_prob < 0.3:
-            predict = [2]
-        info_shows = '| max_prob:{:.3f}'.format(max_prob) + \
-                     '| min_norm:{:3.3f}'.format(min_norm) + \
-                     '| predict:{:1d}'.format(predict[0]) + \
-                     '| att_pos: {:1d}'.format(att_pos[0])
-        print info_shows, '| input_demo_cmd:', input_demo_cmd[0].tolist()[:demo_len[0]]
+        # if max_prob > 0.9 or min_norm < 6.:
+        #     predict = [input_demo_cmd[0, att_pos[0], 0]]
+        # elif max_prob < 0.3:
+        #     predict = [2]
+        # info_shows = '| max_prob:{:.3f}'.format(max_prob) + \
+        #              '| min_norm:{:3.3f}'.format(min_norm) + \
+        #              '| predict:{:1d}'.format(predict[0]) + \
+        #              '| att_pos: {:1d}'.format(att_pos[0])
+        # print info_shows, '| input_demo_cmd:', input_demo_cmd[0].tolist()[:demo_len[0]]
         return predict[0], att_pos[0]
