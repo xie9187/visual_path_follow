@@ -5,51 +5,47 @@ import utils.data_utils as data_utils
 import copy
 import time
 
-def safe_norm(x, epsilon=1e-12, axis=None):
-    return tf.sqrt(tf.reduce_sum(x ** 2, axis=axis) + epsilon)
-
 class deep_metric(object):
     def __init__(self,
                  sess,
                  batch_size,
-                 sample_num_train,
-                 sample_num_valid,
+                 max_len,
                  dim_img,
                  learning_rate,
                  gpu_num,
-                 alpha):
+                 alpha,
+                 dist):
         self.sess = sess
         self.batch_size = batch_size
-        self.sample_num_train = sample_num_train
-        self.sample_num_valid = sample_num_valid
+        self.max_len = max_len
         self.dim_img = dim_img
         self.learning_rate = learning_rate
         self.gpu_num = gpu_num
         self.alpha = alpha
+        self.dist = dist
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             self.demo_img = tf.placeholder(tf.float32, shape=[None] + dim_img, name='demo_img') #b,h,d,c
-            self.posi_img = tf.placeholder(tf.float32, shape=[None, sample_num_train] + dim_img, name='posi_img') #b,l,h,d,c
-            self.nega_img = tf.placeholder(tf.float32, shape=[None, sample_num_train] + dim_img, name='nega_img') #b,l,h,d,c
-            self.posi_img_valid = tf.placeholder(tf.float32, shape=[None, sample_num_valid] + dim_img, name='posi_img_valid') #b,l,h,d,c
-            self.nega_img_valid = tf.placeholder(tf.float32, shape=[None, sample_num_valid] + dim_img, name='nega_img_valid') #b,l,h,d,c
+            self.posi_img = tf.placeholder(tf.float32, shape=[None, max_len] + dim_img, name='posi_img') #b,l,h,d,c
+            self.nega_img = tf.placeholder(tf.float32, shape=[None, max_len] + dim_img, name='nega_img') #b,l,h,d,c
+            self.posi_len = tf.placeholder(tf.int32, shape=[None], name='posi_len')
+            self.nega_len = tf.placeholder(tf.int32, shape=[None], name='nega_len')
             inputs = [self.demo_img, 
                       self.posi_img, 
-                      self.nega_img]
-            gpu_accuracy, gpu_loss = self.multi_gpu_model(inputs)
+                      self.nega_img,
+                      self.posi_len,
+                      self.nega_len]
+            gpu_accuracy, gpu_loss, gpu_posi_dist, gpu_nega_dist = self.multi_gpu_model(inputs)
             self.accuracy = tf.reduce_mean(gpu_accuracy)
             self.loss = tf.reduce_mean(gpu_loss)
+            self.posi_dist = tf.concat(gpu_posi_dist, axis=0)
+            self.nega_dist = tf.concat(gpu_nega_dist, axis=0)
             self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
-
-            inputs_valid = [self.demo_img, 
-                            self.posi_img_valid, 
-                            self.nega_img_valid]
-            self.accuracy_valid, self.loss_valid = self.model(inputs_valid, sample_num_valid)
 
     def multi_gpu_model(self, inputs):
         # build model with multi-gpu parallely
         splited_inputs_list = []
-        splited_outputs_list = [[], []]
+        splited_outputs_list = [[], [], [], []]
         for var in inputs:
             splited_inputs_list.append(tf.split(var, self.gpu_num, axis=0))
         for i in range(self.gpu_num):
@@ -57,7 +53,7 @@ class deep_metric(object):
                 inputs_per_gpu = []
                 for splited_input in splited_inputs_list:
                     inputs_per_gpu.append(splited_input[i]) 
-                outputs_per_gpu = self.model(inputs_per_gpu, self.sample_num_train)
+                outputs_per_gpu = self.model(inputs_per_gpu)
                 for idx, splited_output in enumerate(outputs_per_gpu):
                     splited_outputs_list[idx].append(splited_output)
         outputs = []
@@ -71,32 +67,62 @@ class deep_metric(object):
             outputs = outputs[0]
         return outputs
 
-    def model(self, inputs, sample_num):
-        demo_img, posi_img, nega_img = inputs
+    def model(self, inputs):
+        demo_img, posi_img, nega_img, posi_len, nega_len = inputs
         posi_img = tf.reshape(posi_img, [-1]+self.dim_img) #b*l,h,d,c
         nega_img = tf.reshape(nega_img, [-1]+self.dim_img) #b*l,h,d,c
 
         # encoding
         demo_vect = self.encode_image(demo_img) # b, dim_img_feat
-        demo_vect = tf.tile(tf.expand_dims(demo_vect, axis=1), [1, sample_num, 1]) # b, l, dim_img_feat
+        demo_vect = tf.tile(tf.expand_dims(demo_vect, axis=1), [1, self.max_len, 1]) # b, l, dim_img_feat
         dim_img_feat = demo_vect.get_shape().as_list()[-1]
-        posi_vect = tf.reshape(self.encode_image(posi_img), [-1, sample_num, dim_img_feat]) # b, l, dim_img_feat
-        nega_vect = tf.reshape(self.encode_image(nega_img), [-1, sample_num, dim_img_feat]) # b, l, dim_img_feat
+        posi_vect = tf.reshape(self.encode_image(posi_img), [-1, self.max_len, dim_img_feat]) # b, l, dim_img_feat
+        nega_vect = tf.reshape(self.encode_image(nega_img), [-1, self.max_len, dim_img_feat]) # b, l, dim_img_feat
 
-        # distance
-        posi_dist = safe_norm(demo_vect - posi_vect, axis=2) # b, l
-        nega_dist = safe_norm(demo_vect - nega_vect, axis=2) # b, l
-        mean_posi_dist = tf.reduce_mean(posi_dist)
-        mean_nega_dist = tf.reduce_mean(nega_dist)
+        if self.dist == 'cos':
+            # cos similarity
+            posi_mask = tf.sequence_mask(posi_len, maxlen=self.max_len, dtype=tf.float32) # b, l
+            nega_mask = tf.sequence_mask(nega_len, maxlen=self.max_len, dtype=tf.float32) # b, l
+            posi_sim = model_utils.cos_sim(demo_vect, posi_vect, axis=2)*posi_mask # b, l
+            nega_sim = model_utils.cos_sim(demo_vect, nega_vect, axis=2)*nega_mask # b, l
+            mean_posi_sim = tf.reduce_sum(posi_sim)/tf.reduce_sum(posi_mask)
+            mean_nega_sim = tf.reduce_sum(nega_sim)/tf.reduce_sum(nega_mask)
+            # loss
+            loss = mean_nega_sim + self.alpha - mean_posi_sim
+            # metric
+            max_nega_sim = tf.tile(tf.reduce_max(nega_sim, axis=1, keepdims=True), [1, self.max_len]) # b, l
+            greater = tf.greater(posi_sim * posi_mask, max_nega_sim * posi_mask) # b, l
+            metric = tf.reduce_sum(tf.cast(greater, dtype=tf.float32))/tf.reduce_sum(posi_mask)
 
-        # loss
-        loss = mean_posi_dist + self.alpha - mean_nega_dist
+            return metric, loss, posi_sim, nega_sim
 
-        # accuracy
-        correct = tf.greater(nega_dist, posi_dist) # b, l
-        accuracy = tf.reduce_mean(tf.cast(correct, dtype=tf.float32))
+        elif self.dist == 'l2':
+            # l2 norm
+            posi_mask = tf.sequence_mask(posi_len, maxlen=self.max_len, dtype=tf.float32) # b, l
+            nega_mask = tf.sequence_mask(nega_len, maxlen=self.max_len, dtype=tf.float32) # b, l
 
-        return accuracy, loss
+            posi_dist = model_utils.safe_norm(demo_vect-posi_vect, axis=2) * posi_mask # b, l
+            nega_dist = model_utils.safe_norm(demo_vect-nega_vect, axis=2) * nega_mask + (1-nega_mask)*100. # b, l
+
+            posi_dist = tf.sort(posi_dist, axis=1, direction='DESCENDING') # b, l
+            nega_dist = tf.sort(nega_dist, axis=1, direction='ASCENDING') # b, l
+
+            posi_max = tf.reduce_max(posi_dist, axis=1) # b
+            nega_min = tf.reduce_min(nega_dist, axis=1) # b
+            mean_extreme_dist = tf.reduce_mean(nega_min - posi_max)
+
+            mean_posi_dist = tf.reduce_sum(posi_dist)/tf.reduce_sum(posi_mask)
+            mean_nega_dist = tf.reduce_sum(nega_dist*nega_mask)/tf.reduce_sum(nega_mask)
+
+            # loss
+            loss = mean_posi_dist + self.alpha - mean_nega_dist
+            # metric
+            min_nega_dist = tf.tile(tf.reduce_min(nega_dist, axis=1, keepdims=True), [1, self.max_len]) # b, l
+            less = tf.less(posi_dist * posi_mask, min_nega_dist * posi_mask) # b, l
+            metric = tf.reduce_sum(tf.cast(less, dtype=tf.float32))/tf.reduce_sum(posi_mask)
+
+            return metric, loss, posi_dist, nega_dist
+
 
     def encode_image(self, inputs):
         conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope='conv1', max_pool=False)
@@ -109,17 +135,21 @@ class deep_metric(object):
         return outputs
 
     def train(self, data):
-        demo_img, posi_img, nega_img = data
+        demo_img, posi_img, nega_img, posi_len, nega_len = data
         return self.sess.run([self.accuracy, self.loss, self.opt], feed_dict={
             self.demo_img: demo_img,
             self.posi_img: posi_img,
-            self.nega_img: nega_img
+            self.nega_img: nega_img,
+            self.posi_len: posi_len,
+            self.nega_len: nega_len
             })
 
     def valid(self, data):
-        demo_img, posi_img_valid, nega_img_valid = data
-        return self.sess.run([self.accuracy_valid, self.loss_valid], feed_dict={
+        demo_img, posi_img, nega_img, posi_len, nega_len= data
+        return self.sess.run([self.accuracy, self.loss, self.posi_dist, self.nega_dist], feed_dict={
             self.demo_img: demo_img,
-            self.posi_img_valid: posi_img_valid,
-            self.nega_img_valid: nega_img_valid
+            self.posi_img: posi_img,
+            self.nega_img: nega_img,
+            self.posi_len: posi_len,
+            self.nega_len: nega_len
             })

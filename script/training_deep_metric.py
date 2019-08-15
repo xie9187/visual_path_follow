@@ -20,15 +20,15 @@ flag = tf.app.flags
 
 # network param
 flag.DEFINE_integer('batch_size', 8, 'Batch size to use during training.')
-flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
-flag.DEFINE_integer('sample_num_train', 2, 'sample numbers in training')
-flag.DEFINE_integer('sample_num_valid', 8, 'sample numbers in validation')
+flag.DEFINE_float('learning_rate', 1e-6, 'Learning rate.')
+flag.DEFINE_integer('max_len', 20, 'sample numbers in training')
 flag.DEFINE_float('alpha', 1., 'alpha margin')
 flag.DEFINE_integer('dim_rgb_h', 96, 'input rgb image height.') # 96
 flag.DEFINE_integer('dim_rgb_w', 128, 'input rgb image width.') # 128
 flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu')
 flag.DEFINE_integer('max_step', 300, 'max step.')
+flag.DEFINE_string('dist', 'cos', 'distance (cos, l2)')
 
 # training param
 flag.DEFINE_string('data_dir',  '/mnt/Work/catkin_ws/data/vpf_data/mini',
@@ -106,7 +106,7 @@ def training(sess, model):
                                                                     t*batch_size, 
                                                                     batch_size,
                                                                     img_size,
-                                                                    flags.sample_num_train)
+                                                                    flags.max_len)
             sample_time = time.time() - sample_start_time
 
             opt_start_time = time.time()
@@ -133,8 +133,8 @@ def training(sess, model):
                                                                     t*batch_size, 
                                                                     batch_size,
                                                                     img_size,
-                                                                    flags.sample_num_valid)
-            acc, loss = model.valid(batch_data)
+                                                                    flags.max_len)
+            acc, loss, posi_dist, nega_dist = model.valid(batch_data)
 
             loss_list.append(loss)
             acc_list.append(acc)
@@ -159,8 +159,14 @@ def training(sess, model):
                                               test_acc_ph: acc_valid
                                               })
         summary_writer.add_summary(summary, epoch)
-        if flags.save_model and (epoch+1)%10 == 0:
+        if flags.save_model and (epoch+1)%20 == 0:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
+
+            dist_name = os.path.join(model_dir, 'epoch_{:d}_posi_dist.csv'.format(epoch))
+            data_utils.save_file(dist_name, posi_dist)
+
+            dist_name = os.path.join(model_dir, 'epoch_{:d}_nega_dist.csv'.format(epoch))
+            data_utils.save_file(dist_name, nega_dist)
 
 def main():
     config = tf.ConfigProto(allow_soft_placement=True)
@@ -168,12 +174,12 @@ def main():
     with tf.Session(config=config) as sess:#
         model = deep_metric.deep_metric(sess=sess,
                                             batch_size=flags.batch_size,
-                                            sample_num_train=flags.sample_num_train,
-                                            sample_num_valid=flags.sample_num_valid,
+                                            max_len=flags.max_len,
                                             dim_img=[flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c],
                                             learning_rate=flags.learning_rate,
                                             gpu_num=flags.gpu_num,
-                                            alpha=flags.alpha)
+                                            alpha=flags.alpha,
+                                            dist=flags.dist)
         if flags.online_test:
             pass
         elif flags.offline_test:

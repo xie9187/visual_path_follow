@@ -205,3 +205,11 @@ def variable_summaries(var):
         tf.summary.scalar('max', tf.reduce_max(var))
         tf.summary.scalar('min', tf.reduce_min(var))
         tf.summary.histogram('histogram', var)
+
+def safe_norm(x, epsilon=1e-12, axis=None):
+    return tf.sqrt(tf.reduce_sum(x ** 2, axis=axis) + epsilon)
+
+def cos_sim(a, b, axis=None):
+    norm_a = safe_norm(a, axis)
+    norm_b = safe_norm(b, axis)
+    return tf.reduce_sum(a * b, axis=axis) / (norm_a * norm_b)
