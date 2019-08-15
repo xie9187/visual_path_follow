@@ -35,7 +35,8 @@ class visual_commander(object):
                  inputs_num,
                  keep_prob,
                  loss_rate,
-                 stochastic_hard):
+                 stochastic_hard,
+                 load_cnn):
         self.sess = sess
         self.batch_size = batch_size
         self.max_step = max_step
@@ -56,6 +57,7 @@ class visual_commander(object):
         self.keep_prob = keep_prob
         self.loss_rate = loss_rate
         self.stochastic_hard = stochastic_hard
+        self.load_cnn = load_cnn
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             self.input_demo_img = tf.placeholder(tf.float32, shape=[None, max_n_demo] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
@@ -269,11 +271,12 @@ class visual_commander(object):
 
 
     def encode_image(self, inputs):
-        conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope='conv1', max_pool=False)
-        conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False)
-        conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False)
-        conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False)
-        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False)
+        trainable = False if self.load_cnn else True
+        conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope='conv1', max_pool=False, trainable=trainable)
+        conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False, trainable=trainable)
+        conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False, trainable=trainable)
+        conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False, trainable=trainable)
+        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, trainable=trainable)
         shape = conv5.get_shape().as_list()
         outputs = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b*l, dim_img_feat
         return outputs

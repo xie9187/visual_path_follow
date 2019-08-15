@@ -115,7 +115,7 @@ class deep_metric(object):
             mean_nega_dist = tf.reduce_sum(nega_dist*nega_mask)/tf.reduce_sum(nega_mask)
 
             # loss
-            loss = mean_posi_dist + self.alpha - mean_nega_dist
+            loss = mean_posi_dist + self.alpha - mean_nega_dist - mean_extreme_dist
             # metric
             min_nega_dist = tf.tile(tf.reduce_min(nega_dist, axis=1, keepdims=True), [1, self.max_len]) # b, l
             less = tf.less(posi_dist * posi_mask, min_nega_dist * posi_mask) # b, l
