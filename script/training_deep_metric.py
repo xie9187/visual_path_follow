@@ -19,7 +19,7 @@ RANDOM_SEED = 1234
 flag = tf.app.flags
 
 # network param
-flag.DEFINE_integer('batch_size', 8, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-6, 'Learning rate.')
 flag.DEFINE_integer('max_len', 20, 'sample numbers in training')
 flag.DEFINE_float('alpha', 1., 'alpha margin')
@@ -28,7 +28,7 @@ flag.DEFINE_integer('dim_rgb_w', 128, 'input rgb image width.') # 128
 flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu')
 flag.DEFINE_integer('max_step', 300, 'max step.')
-flag.DEFINE_string('dist', 'cos', 'distance (cos, l2)')
+flag.DEFINE_string('dist', 'l2', 'distance (cos, l2)')
 
 # training param
 flag.DEFINE_string('data_dir',  '/mnt/Work/catkin_ws/data/vpf_data/mini',
