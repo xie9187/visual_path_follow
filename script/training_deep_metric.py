@@ -66,7 +66,7 @@ def training(sess, model):
         print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
 
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
-    saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
+    saver = tf.train.Saver(max_to_keep=20, save_relative_paths=True)
 
     train_loss_ph = tf.placeholder(tf.float32, [], name='train_loss_ph')
     test_loss_ph = tf.placeholder(tf.float32, [], name='test_loss_ph')
