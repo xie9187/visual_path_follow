@@ -271,7 +271,7 @@ class visual_commander(object):
 
 
     def encode_image(self, inputs):
-        trainable = False if self.load_cnn else True
+        trainable = True if self.load_cnn else True
         conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope='conv1', max_pool=False, trainable=trainable)
         conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False, trainable=trainable)
         conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False, trainable=trainable)
