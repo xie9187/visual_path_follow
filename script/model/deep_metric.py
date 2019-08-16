@@ -139,7 +139,7 @@ class deep_metric(object):
         conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False, activation=activation)
         conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False, activation=activation)
         conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False, activation=activation)
-        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, activation=activation)
+        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, activation=tf.nn.tanh)
         shape = conv5.get_shape().as_list()
         outputs = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b*l, dim_img_feat
         return outputs
