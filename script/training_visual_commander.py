@@ -50,6 +50,7 @@ flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
 flag.DEFINE_float('threshold', 0.8, 'prob threshold in commander')
+flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
 
 # rdqn param
 flag.DEFINE_integer('max_epi_step', 300, 'max step.')
@@ -68,6 +69,7 @@ flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/local
                     'Data directory')
 flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', 'vc_demo_sum', 'model name.')
+flag.DEFINE_string('cnn_model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network/deep_metric', 'pretrained cnn path')
 flag.DEFINE_integer('max_epoch', 50, 'max epochs.')
 flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
@@ -103,8 +105,22 @@ def training(sess, model):
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     sess.run(init_op)
 
+    if flags.load_cnn:
+        cnn_var_list = [v for v in tf.global_variables() if 'conv' in v.name]
+        print 'CNN var list: '
+        for idx, v in enumerate(cnn_var_list):
+            print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
+        cnn_saver = tf.train.Saver(cnn_var_list)
+        checkpoint = tf.train.get_checkpoint_state(flags.cnn_model_dir)
+        if checkpoint and checkpoint.model_checkpoint_path:
+            cnn_saver.restore(sess, checkpoint.model_checkpoint_path)
+            print 'cnn model loaded: ', checkpoint.model_checkpoint_path 
+        else:
+            print 'cnn model not found'
+
     trainable_var = tf.trainable_variables()
     part_var = []
+    print 'Trainable var list: '
     for idx, v in enumerate(trainable_var):
         print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
         # with tf.name_scope(v.name.replace(':0', '')):
@@ -454,7 +470,7 @@ def online_testing(sess, model, agent):
                 env.PublishDemoRGBImage(demo_img_seq[0, att_pos], att_pos)
 
                 prev_one_hot_action = copy.deepcopy(one_hot_action)
-                q, gru_h_out = agent.ActionPredict([depth_stack], [[pred_cmd]], [prev_one_hot_action], gru_h_in)
+                q, gru_h_out = agent.ActionPredict([depth_stack], [[cmd]], [prev_one_hot_action], gru_h_in)
                 action_index = np.argmax(q)
                 one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
                 one_hot_action[action_index] = 1
@@ -533,7 +549,8 @@ def main():
                                                  inputs_num=flags.inputs_num,
                                                  keep_prob=flags.keep_prob,
                                                  loss_rate=flags.loss_rate,
-                                                 stochastic_hard=flags.stochastic_hard)
+                                                 stochastic_hard=flags.stochastic_hard,
+                                                 load_cnn=flags.load_cnn)
         if flags.online_test:
             agent = DRQN(flags, sess, len(tf.trainable_variables()))
             online_testing(sess, model, agent)
