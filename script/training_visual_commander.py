@@ -470,7 +470,7 @@ def online_testing(sess, model, agent):
                 env.PublishDemoRGBImage(demo_img_seq[0, att_pos], att_pos)
 
                 prev_one_hot_action = copy.deepcopy(one_hot_action)
-                q, gru_h_out = agent.ActionPredict([depth_stack], [[cmd]], [prev_one_hot_action], gru_h_in)
+                q, gru_h_out = agent.ActionPredict([depth_stack], [[pred_cmd]], [prev_one_hot_action], gru_h_in)
                 action_index = np.argmax(q)
                 one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
                 one_hot_action[action_index] = 1
