@@ -136,7 +136,7 @@ class visual_commander(object):
 
         # process observation
         input_img = tf.reshape(input_img, [-1]+self.dim_img) # b*l, dim_img
-        img_vect = self.encode_image(input_img) # b*l, dim_img_feat
+        img_vect = self.encode_image(input_img, activation=None) # b*l, dim_img_feat
         prev_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_prev_cmd), [-1, self.dim_emb]) # b*l, dim_emb
         input_prev_action = tf.reshape(input_prev_action, [-1, self.dim_a]) # b*l, dim_a
         prev_a_vect = model_utils.dense_layer(input_prev_action, self.dim_emb, scope='a_embedding', activation=None) # b*l, dim_emb
@@ -273,13 +273,13 @@ class visual_commander(object):
         # return max_pos, max_prob, rnn_h_out, att_pos
 
 
-    def encode_image(self, inputs):
+    def encode_image(self, inputs, activation=tf.nn.leaky_relu):
         trainable = True if self.load_cnn else True
-        conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope='conv1', max_pool=False, trainable=trainable)
-        conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False, trainable=trainable)
-        conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False, trainable=trainable)
-        conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False, trainable=trainable)
-        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, trainable=trainable)
+        conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope='conv1', max_pool=False, trainable=trainable, activation=activation)
+        conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False, trainable=trainable, activation=activation)
+        conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False, trainable=trainable, activation=activation)
+        conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False, trainable=trainable, activation=activation)
+        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, trainable=trainable, activation=tf.nn.tanh)
         shape = conv5.get_shape().as_list()
         outputs = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b*l, dim_img_feat
         return outputs
@@ -307,7 +307,7 @@ class visual_commander(object):
     def process_demo_hard_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag, demo_len, stochastic_flag):
         
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
-        demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
+        demo_img_vect = self.encode_image(input_demo_img, activation=None) # b * n, dim_img_feat
         shape = demo_img_vect.get_shape().as_list()
         demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b, n, dim_img_feat
         if not test_flag:
