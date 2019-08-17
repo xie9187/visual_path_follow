@@ -315,7 +315,7 @@ class GridWorld(object):
                 if len(map_path) < 80:
                     break
             else:
-                if len(map_path) > 25:
+                if len(map_path) > 25 and len(map_path) < 40:
                     break 
 
         init_yaw = np.arctan2(real_path[1][1] - real_path[0][1], real_path[1][0] - real_path[0][0])

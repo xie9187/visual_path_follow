@@ -49,7 +49,7 @@ flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
-flag.DEFINE_float('threshold', 0.8, 'prob threshold in commander')
+flag.DEFINE_float('threshold', 0.6, 'prob threshold in commander')
 flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
 
 # rdqn param
@@ -461,8 +461,8 @@ def online_testing(sess, model, agent):
                                                          demo_len=[demo_cnt], 
                                                          t=t,
                                                          threshold=flags.threshold)
-                if pred_cmd == 0:
-                    pred_cmd = 2 
+                # if pred_cmd == 0:
+                #     pred_cmd = 2 
                 if (prev_pred_cmd == 2 and pred_cmd != 2) or (prev_pred_cmd != 2 and pred_cmd == 2):
                     last_pred_cmd = prev_pred_cmd
                 combined_cmd = last_pred_cmd * flags.n_cmd_type + pred_cmd
@@ -550,7 +550,8 @@ def main():
                                                  keep_prob=flags.keep_prob,
                                                  loss_rate=flags.loss_rate,
                                                  stochastic_hard=flags.stochastic_hard,
-                                                 load_cnn=flags.load_cnn)
+                                                 load_cnn=flags.load_cnn,
+                                                 threshold=flags.threshold)
         if flags.online_test:
             agent = DRQN(flags, sess, len(tf.trainable_variables()))
             online_testing(sess, model, agent)

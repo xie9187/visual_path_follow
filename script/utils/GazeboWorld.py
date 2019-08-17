@@ -401,7 +401,7 @@ class GazeboWorld():
         else:
             reward = v * np.cos(w) / 5.
 
-        if not OA_mode and len_route == 0:
+        if not OA_mode and len_route < 5:
             result = 2
             terminate = True
             reward = 1.

@@ -36,7 +36,8 @@ class visual_commander(object):
                  keep_prob,
                  loss_rate,
                  stochastic_hard,
-                 load_cnn):
+                 load_cnn,
+                 threshold):
         self.sess = sess
         self.batch_size = batch_size
         self.max_step = max_step
@@ -58,6 +59,7 @@ class visual_commander(object):
         self.loss_rate = loss_rate
         self.stochastic_hard = stochastic_hard
         self.load_cnn = load_cnn
+        self.threshold = threshold
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             self.input_demo_img = tf.placeholder(tf.float32, shape=[None, max_n_demo] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
@@ -69,6 +71,7 @@ class visual_commander(object):
             self.rnn_h_in = tf.placeholder(tf.float32, shape=[None, n_hidden], name='rnn_h_in') #b,n_hidden
             self.demo_len = tf.placeholder(tf.int32, shape=[None], name='demo_len') #b
             self.seq_len = tf.placeholder(tf.int32, shape=[None], name='seq_len') #b
+            self.prev_att_pos = tf.placeholder(tf.int32, shape=[1], name='prev_att_pos')
 
             self.embedding_cmd = tf.get_variable('cmd_embedding', [self.n_cmd_type, self.dim_emb])
 
@@ -326,20 +329,44 @@ class visual_commander(object):
                 norm_mask = tf.reshape(tf.tile(tf.expand_dims(norm_mask, axis=1), [1, self.max_step, 1]), [-1, self.max_n_demo]) # b*l, n
             # logits = tf.log(tf.nn.softmax(-l2_norm)) # b*l, n
             # masked_prob = tf.nn.softmax(-l2_norm)*norm_mask
+
+            # if test_flag:
+            #     x = tf.squeeze(self.prev_att_pos)
+            #     y = tf.squeeze(demo_len) - 1
+            #     def f0(): return self.prev_att_pos, 0  # 1
+            #     def f1(): return tf.constant([0, 1], dtype=tf.int32), 0  # 2
+            #     def f2(): return tf.concat([self.prev_att_pos, self.prev_att_pos+1], axis=0), 0 # 2
+            #     def f3(): return tf.concat([self.prev_att_pos-1, self.prev_att_pos], axis=0), -1 # 2
+            #     def f4(): return tf.concat([self.prev_att_pos-1, self.prev_att_pos, self.prev_att_pos+1], axis=0), -1 # 2
+            #     indicies, shift = tf.case({tf.equal(y, 0): f0,
+            #                                tf.equal(y, 1): f1,
+            #                                tf.equal(x, 0): f2, 
+            #                                tf.equal(x, y): f3}, 
+            #                                default=f4, exclusive=True)
+            #     l2_norm = tf.gather(tf.squeeze(l2_norm), indicies) # 2~3
+            #     self.part_l2_norm = l2_norm
+            #     self.indicies = indicies
+            #     masked_prob = tf.nn.softmax(-l2_norm) # 2~3
+            #     self.l2_norm = masked_prob
+            #     logits = tf.log(masked_prob + 1e-12) # 2~3
+            #     def f5(): return tf.expand_dims(tf.argmax(logits, output_type=tf.int32) + x + shift, axis=0)
+            #     def f6(): return self.prev_att_pos
+            #     att_pos = tf.cond(tf.reduce_max(masked_prob) > 0.5, f5, f6)
+            # else:
+            #     masked_prob = tf.exp(-l2_norm)*norm_mask / tf.tile(tf.reduce_sum(tf.exp(-l2_norm)*norm_mask, 
+            #                                                                      axis=1, 
+            #                                                                      keepdims=True), 
+            #                                                        [1, self.max_n_demo]) # b*l, n
+            #     logits = tf.log(masked_prob + 1e-12) # b*l, n
+            #     att_pos = tf.argmax(logits, axis=1) # b*l
             masked_prob = tf.exp(-l2_norm)*norm_mask / tf.tile(tf.reduce_sum(tf.exp(-l2_norm)*norm_mask, 
                                                                              axis=1, 
                                                                              keepdims=True), 
                                                                [1, self.max_n_demo]) # b*l, n
+            self.l2_norm = masked_prob
             logits = tf.log(masked_prob + 1e-12) # b*l, n
-            # if test_flag:
-            #     coords = tf.stack([tf.range(1), tf.cast(curr_att, dtype=tf.int32)], axis=1) # 1, 2
-            #     curr_logit = tf.gather_nd(logits, coords) # 1, 1
-            #     coords = tf.stack([tf.range(1), tf.cast(curr_att+1, dtype=tf.int32)], axis=1) # 1, 2
-            #     next_logit = tf.gather_nd(logits, coords) # 1, 1
-            # else:
-            #     att_pos = tf.argmax(logits, axis=1) # b*l
             att_pos = tf.argmax(logits, axis=1) # b*l
-        self.l2_norm = masked_prob
+            self.l2_norm = masked_prob
 
         shape = tf.shape(img_vect)
         coords = tf.stack([tf.range(shape[0]), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
@@ -349,6 +376,7 @@ class visual_commander(object):
         if not test_flag:
             demo_cmd_vect = tf.tile(tf.expand_dims(demo_cmd_vect, axis=1), [1, self.max_step, 1, 1]) # b, l, n, dim_emb
             demo_cmd_vect = tf.reshape(demo_cmd_vect, [-1, self.max_n_demo, self.dim_emb]) # b*l, n, dim_emb
+            l2_norm = l2_norm+(1.-norm_mask)*100.
         attended_demo_cmd_vect = tf.gather_nd(demo_cmd_vect, coords) # b*l, dim_emb
 
         if self.inputs_num == 1:
@@ -357,7 +385,7 @@ class visual_commander(object):
             demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
         demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
 
-        return demo_dense, att_pos, logits, masked_prob, l2_norm+(1.-norm_mask)*100.
+        return demo_dense, att_pos, logits, masked_prob, l2_norm
 
     def train(self, data):
         input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
@@ -398,26 +426,30 @@ class visual_commander(object):
     def online_predict(self, input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, demo_len, t, threshold):
         if t == 0:
             rnn_h_in = np.zeros([1, self.n_hidden], np.float32)
+            self.prev_att_pos_real = [0]
         else:
             rnn_h_in = copy.deepcopy(self.rnn_h_out_real)
 
-        predict, self.rnn_h_out_real, att_pos, max_prob, min_norm = self.sess.run([self.predict, 
-                                                                         self.rnn_h_out, 
-                                                                         self.att_pos, 
-                                                                         self.max_prob,
-                                                                         self.min_norm], feed_dict={
-                                                                         self.input_demo_img: data_utils.img_normalisation(copy.deepcopy(input_demo_img)),
-                                                                         self.input_demo_cmd: input_demo_cmd,
-                                                                         self.test_img: data_utils.img_normalisation(copy.deepcopy(input_img)),
-                                                                         self.test_prev_cmd: input_prev_cmd,
-                                                                         self.test_prev_action: input_prev_action,
-                                                                         self.demo_len: demo_len,
-                                                                         self.rnn_h_in: rnn_h_in
-                                                                         })
-        
+        out = self.sess.run([self.predict, 
+                             self.rnn_h_out, 
+                             self.att_pos, 
+                             self.max_prob,
+                             self.min_norm,
+                             ], feed_dict={
+                             self.input_demo_img: data_utils.img_normalisation(copy.deepcopy(input_demo_img)),
+                             self.input_demo_cmd: input_demo_cmd,
+                             self.test_img: data_utils.img_normalisation(copy.deepcopy(input_img)),
+                             self.test_prev_cmd: input_prev_cmd,
+                             self.test_prev_action: input_prev_action,
+                             self.demo_len: demo_len,
+                             self.rnn_h_in: rnn_h_in,
+                             self.prev_att_pos: self.prev_att_pos_real
+                             })
+        predict, self.rnn_h_out_real, att_pos, max_prob, min_norm= out
+        self.prev_att_pos_real = att_pos
         # if max_prob > 0.9 or min_norm < 6.:
         #     predict = [input_demo_cmd[0, att_pos[0], 0]]
-        # elif max_prob < 0.3:
+        # elif max_prob < 0.4:
         #     predict = [2]
         # info_shows = '| max_prob:{:.3f}'.format(max_prob) + \
         #              '| min_norm:{:3.3f}'.format(min_norm) + \
