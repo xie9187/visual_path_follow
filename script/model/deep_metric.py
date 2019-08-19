@@ -76,8 +76,8 @@ class deep_metric(object):
         demo_vect = self.encode_image(demo_img, activation=None) # b, dim_img_feat
         demo_vect = tf.tile(tf.expand_dims(demo_vect, axis=1), [1, self.max_len, 1]) # b, l, dim_img_feat
         dim_img_feat = demo_vect.get_shape().as_list()[-1]
-        posi_vect = tf.reshape(self.encode_image(posi_img, activation=None), [-1, self.max_len, dim_img_feat]) # b, l, dim_img_feat
-        nega_vect = tf.reshape(self.encode_image(nega_img, activation=None), [-1, self.max_len, dim_img_feat]) # b, l, dim_img_feat
+        posi_vect = tf.reshape(self.encode_image(posi_img), [-1, self.max_len, dim_img_feat]) # b, l, dim_img_feat
+        nega_vect = tf.reshape(self.encode_image(nega_img), [-1, self.max_len, dim_img_feat]) # b, l, dim_img_feat
 
         if self.dist == 'cos':
             # cos similarity
@@ -139,7 +139,7 @@ class deep_metric(object):
         conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False, activation=activation)
         conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False, activation=activation)
         conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False, activation=activation)
-        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, activation=tf.nn.tanh)
+        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, activation=None)
         shape = conv5.get_shape().as_list()
         outputs = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b*l, dim_img_feat
         return outputs

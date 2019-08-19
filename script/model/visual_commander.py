@@ -266,12 +266,6 @@ class visual_commander(object):
         min_norm = tf.reduce_min(l2_norm)
         return predict, rnn_h_out, att_pos, max_prob, min_norm
 
-        # # binary filtering after attention
-        # max_pos = tf.argmax(prob, axis=1) # b
-        # max_prob = tf.reduce_max(prob) # b
-        # rnn_h_out = rnn_h_in
-        # return max_pos, max_prob, rnn_h_out, att_pos
-
 
     def encode_image(self, inputs, activation=tf.nn.leaky_relu):
         trainable = True if self.load_cnn else True
@@ -279,7 +273,7 @@ class visual_commander(object):
         conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False, trainable=trainable, activation=activation)
         conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False, trainable=trainable, activation=activation)
         conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False, trainable=trainable, activation=activation)
-        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, trainable=trainable, activation=tf.nn.tanh)
+        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, trainable=trainable, activation=None)
         shape = conv5.get_shape().as_list()
         outputs = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b*l, dim_img_feat
         return outputs
