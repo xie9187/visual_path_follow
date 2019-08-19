@@ -136,7 +136,7 @@ class visual_commander(object):
 
         # process observation
         input_img = tf.reshape(input_img, [-1]+self.dim_img) # b*l, dim_img
-        img_vect = self.encode_image(input_img, activation=None) # b*l, dim_img_feat
+        img_vect = self.encode_image(input_img) # b*l, dim_img_feat
         prev_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_prev_cmd), [-1, self.dim_emb]) # b*l, dim_emb
         input_prev_action = tf.reshape(input_prev_action, [-1, self.dim_a]) # b*l, dim_a
         prev_a_vect = model_utils.dense_layer(input_prev_action, self.dim_emb, scope='a_embedding', activation=None) # b*l, dim_emb
@@ -301,7 +301,7 @@ class visual_commander(object):
     def process_demo_hard_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag, demo_len, stochastic_flag):
         
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
-        demo_img_vect = self.encode_image(input_demo_img, activation=None) # b * n, dim_img_feat
+        demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
         shape = demo_img_vect.get_shape().as_list()
         demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b, n, dim_img_feat
         if not test_flag:
