@@ -8,7 +8,6 @@ import time
 import random
 import utils.data_utils as data_utils
 import utils.model_utils as model_utils
-import model.visual_commander as commander_model
 import progressbar
 import rospy
 import matplotlib.pyplot as plt
@@ -17,6 +16,8 @@ from utils.GazeboRoomDataGenerator import GridWorld, FileProcess
 from utils.GazeboWorld import GazeboWorld
 from utils.ou_noise import OUNoise
 from model.drqn import DRQN
+from model.visual_commander import visual_commander
+from model.deep_metric import deep_metric
 
 CWD = os.getcwd()
 RANDOM_SEED = 1234
@@ -51,21 +52,15 @@ flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ 
 flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
 flag.DEFINE_float('threshold', 0.6, 'prob threshold in commander')
 flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
+flag.DEFINE_boolean('metric_learning', False, 'metric learning')
 
-# rdqn param
-flag.DEFINE_integer('max_epi_step', 300, 'max step.')
-flag.DEFINE_float('tau', 0.01, 'Target network update rate')
-flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
-flag.DEFINE_boolean('dueling', False, 'dueling network')
-flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
-flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer') #5000
-flag.DEFINE_string('controller_model_name', 'drqn', 'Name of the model.')
-flag.DEFINE_integer('dim_action', 3, 'dimension of action.')
-flag.DEFINE_boolean('test', True, 'whether to test.')
-flag.DEFINE_float('gamma', 0.99, 'reward discount')
+# metric param
+flag.DEFINE_integer('max_len', 20, 'sample numbers in training')
+flag.DEFINE_float('alpha', 1., 'alpha margin')
+flag.DEFINE_string('dist', 'l2', 'distance (cos, l2)')
 
 # training param
-flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/localhost',
+flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/axe',
                     'Data directory')
 flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', 'vc_demo_sum', 'model name.')
@@ -164,6 +159,13 @@ def training(sess, model):
         for t in xrange(len(train_data)/batch_size):
             sample_start_time = time.time()
             batch_data = data_utils.get_a_batch(train_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
+            if flags.metric_learning:
+                metric_batch_data = data_utils.get_a_batch_for_metric_learning(train_data, 
+                                                                               t*batch_size, 
+                                                                               batch_size,
+                                                                               img_size,
+                                                                               flags.max_len)
+                batch_data += metric_batch_data
             sample_time = time.time() - sample_start_time
 
             opt_start_time = time.time()
@@ -187,6 +189,13 @@ def training(sess, model):
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = data_utils.get_a_batch(valid_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
+            if flags.metric_learning:
+                metric_batch_data = data_utils.get_a_batch_for_metric_learning(valid_data, 
+                                                                               t*batch_size, 
+                                                                               batch_size,
+                                                                               img_size,
+                                                                               flags.max_len)
+                batch_data += metric_batch_data
             acc, loss, _, _, _ = model.valid(batch_data)
 
             loss_list.append(loss)
@@ -289,28 +298,40 @@ def main():
     config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:#
-        model = commander_model.visual_commander(sess=sess,
-                                                 batch_size=flags.batch_size,
-                                                 max_step=flags.max_step,
-                                                 max_n_demo=flags.max_n_demo,
-                                                 n_layers=flags.n_layers,
-                                                 n_hidden=flags.n_hidden,
-                                                 dim_cmd=flags.dim_cmd,
-                                                 dim_img=[flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c],
-                                                 dim_emb=flags.dim_emb,
-                                                 dim_a=flags.dim_a,
-                                                 n_cmd_type=flags.n_cmd_type,
-                                                 learning_rate=flags.learning_rate,
-                                                 gpu_num=flags.gpu_num,
-                                                 test=flags.online_test,
-                                                 demo_mode=flags.demo_mode,
-                                                 post_att_model=flags.post_att_model,
-                                                 inputs_num=flags.inputs_num,
-                                                 keep_prob=flags.keep_prob,
-                                                 loss_rate=flags.loss_rate,
-                                                 stochastic_hard=flags.stochastic_hard,
-                                                 load_cnn=flags.load_cnn,
-                                                 threshold=flags.threshold)
+        if flags.metric_learning:
+            metric_model = deep_metric(sess=sess,
+                                       batch_size=flags.batch_size,
+                                       max_len=flags.max_len,
+                                       dim_img=[flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c],
+                                       learning_rate=flags.learning_rate,
+                                       gpu_num=flags.gpu_num,
+                                       alpha=flags.alpha,
+                                       dist=flags.dist)
+        else:
+            metric_model = None
+        model = visual_commander(sess=sess,
+                                 batch_size=flags.batch_size,
+                                 max_step=flags.max_step,
+                                 max_n_demo=flags.max_n_demo,
+                                 n_layers=flags.n_layers,
+                                 n_hidden=flags.n_hidden,
+                                 dim_cmd=flags.dim_cmd,
+                                 dim_img=[flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c],
+                                 dim_emb=flags.dim_emb,
+                                 dim_a=flags.dim_a,
+                                 n_cmd_type=flags.n_cmd_type,
+                                 learning_rate=flags.learning_rate,
+                                 gpu_num=flags.gpu_num,
+                                 test=flags.online_test,
+                                 demo_mode=flags.demo_mode,
+                                 post_att_model=flags.post_att_model,
+                                 inputs_num=flags.inputs_num,
+                                 keep_prob=flags.keep_prob,
+                                 loss_rate=flags.loss_rate,
+                                 stochastic_hard=flags.stochastic_hard,
+                                 load_cnn=flags.load_cnn,
+                                 threshold=flags.threshold,
+                                 metric_model=metric_model)
         if flags.offline_test:
             offline_testing(sess, model)
         else:

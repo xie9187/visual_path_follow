@@ -37,7 +37,8 @@ class visual_commander(object):
                  loss_rate,
                  stochastic_hard,
                  load_cnn,
-                 threshold):
+                 threshold,
+                 metric_model=None):
         self.sess = sess
         self.batch_size = batch_size
         self.max_step = max_step
@@ -60,6 +61,7 @@ class visual_commander(object):
         self.stochastic_hard = stochastic_hard
         self.load_cnn = load_cnn
         self.threshold = threshold
+        self.metric_model = metric_model
 
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             self.input_demo_img = tf.placeholder(tf.float32, shape=[None, max_n_demo] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
@@ -91,7 +93,11 @@ class visual_commander(object):
                           self.seq_len]
                 gpu_accuracy, gpu_cmd_loss, gpu_att_loss, self.batch_pred, self.batch_att_pos = self.multi_gpu_model(inputs)
                 self.accuracy = tf.reduce_mean(gpu_accuracy)
-                self.loss = tf.reduce_mean(gpu_cmd_loss) + tf.reduce_mean(gpu_att_loss) * self.loss_rate
+                if self.metric_model is not None:
+                    metric_loss = self.metric_model.loss
+                    self.loss = tf.reduce_mean(gpu_cmd_loss) + metric_loss * self.loss_rate
+                else:
+                    self.loss = tf.reduce_mean(gpu_cmd_loss) + tf.reduce_mean(gpu_att_loss) * self.loss_rate
                 self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
             else:
                 inputs = [self.input_demo_img, 
@@ -382,40 +388,89 @@ class visual_commander(object):
         return demo_dense, att_pos, logits, masked_prob, l2_norm
 
     def train(self, data):
-        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
-        if not self.test:
-            rnn_h_in = np.zeros([self.batch_size/self.gpu_num, self.n_hidden], np.float32)
-            return self.sess.run([self.accuracy, self.loss, self.opt], feed_dict={
-                self.input_demo_img: input_demo_img,
-                self.input_demo_cmd: input_demo_cmd,
-                self.input_img: input_img,
-                self.input_prev_cmd: input_prev_cmd,
-                self.input_prev_action: input_prev_action,
-                self.label_cmd: label_cmd,
-                self.demo_len: demo_len,
-                self.seq_len: seq_len,
-                self.rnn_h_in: rnn_h_in
-                })
+        if self.metric_model is None:
+            [input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _] = data
+            if not self.test:
+                rnn_h_in = np.zeros([self.batch_size/self.gpu_num, self.n_hidden], np.float32)
+                return self.sess.run([self.accuracy, self.loss, self.opt], feed_dict={
+                    self.input_demo_img: input_demo_img,
+                    self.input_demo_cmd: input_demo_cmd,
+                    self.input_img: input_img,
+                    self.input_prev_cmd: input_prev_cmd,
+                    self.input_prev_action: input_prev_action,
+                    self.label_cmd: label_cmd,
+                    self.demo_len: demo_len,
+                    self.seq_len: seq_len,
+                    self.rnn_h_in: rnn_h_in
+                    })
+            else:
+                return [], [], []
         else:
-            return [], [], []
+            [input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _, 
+             demo_img, posi_img, nega_img, posi_len, nega_len] = data
+            if not self.test:
+                rnn_h_in = np.zeros([self.batch_size/self.gpu_num, self.n_hidden], np.float32)
+                return self.sess.run([self.accuracy, self.loss, self.opt], feed_dict={
+                    self.input_demo_img: input_demo_img,
+                    self.input_demo_cmd: input_demo_cmd,
+                    self.input_img: input_img,
+                    self.input_prev_cmd: input_prev_cmd,
+                    self.input_prev_action: input_prev_action,
+                    self.label_cmd: label_cmd,
+                    self.demo_len: demo_len,
+                    self.seq_len: seq_len,
+                    self.rnn_h_in: rnn_h_in,
+                    self.metric_model.demo_img: demo_img,
+                    self.metric_model.posi_img: posi_img,
+                    self.metric_model.nega_img: nega_img,
+                    self.metric_model.posi_len: posi_len,
+                    self.metric_model.nega_len: nega_len
+                    })
+            else:
+                return [], [], []
+
 
     def valid(self, data):
-        input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
-        if not self.test:
-            rnn_h_in = np.zeros([self.batch_size/self.gpu_num, self.n_hidden], np.float32)
-            return self.sess.run([self.accuracy, self.loss, self.batch_pred, self.batch_att_pos, self.l2_norm], feed_dict={
-                self.input_demo_img: input_demo_img,
-                self.input_demo_cmd: input_demo_cmd,
-                self.input_img: input_img,
-                self.input_prev_cmd: input_prev_cmd,
-                self.input_prev_action: input_prev_action,
-                self.label_cmd: label_cmd,
-                self.demo_len: demo_len,
-                self.seq_len: seq_len,
-                self.rnn_h_in: rnn_h_in
-                })
+        if self.metric_model is None:
+            input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _ = data
+            if not self.test:
+                rnn_h_in = np.zeros([self.batch_size/self.gpu_num, self.n_hidden], np.float32)
+                return self.sess.run([self.accuracy, self.loss, self.batch_pred, self.batch_att_pos, self.l2_norm], feed_dict={
+                    self.input_demo_img: input_demo_img,
+                    self.input_demo_cmd: input_demo_cmd,
+                    self.input_img: input_img,
+                    self.input_prev_cmd: input_prev_cmd,
+                    self.input_prev_action: input_prev_action,
+                    self.label_cmd: label_cmd,
+                    self.demo_len: demo_len,
+                    self.seq_len: seq_len,
+                    self.rnn_h_in: rnn_h_in
+                    })
+            else:
+                return [], []
         else:
-            return [], []
+            [input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, label_cmd, demo_len, seq_len, _, 
+             demo_img, posi_img, nega_img, posi_len, nega_len] = data
+            if not self.test:
+                rnn_h_in = np.zeros([self.batch_size/self.gpu_num, self.n_hidden], np.float32)
+                return self.sess.run([self.accuracy, self.loss, self.batch_pred, self.batch_att_pos, self.l2_norm], feed_dict={
+                    self.input_demo_img: input_demo_img,
+                    self.input_demo_cmd: input_demo_cmd,
+                    self.input_img: input_img,
+                    self.input_prev_cmd: input_prev_cmd,
+                    self.input_prev_action: input_prev_action,
+                    self.label_cmd: label_cmd,
+                    self.demo_len: demo_len,
+                    self.seq_len: seq_len,
+                    self.rnn_h_in: rnn_h_in,
+                    self.metric_model.demo_img: demo_img,
+                    self.metric_model.posi_img: posi_img,
+                    self.metric_model.nega_img: nega_img,
+                    self.metric_model.posi_len: posi_len,
+                    self.metric_model.nega_len: nega_len
+                    })
+            else:
+                return [], []
 
     def online_predict(self, input_demo_img, input_demo_cmd, input_img, input_prev_cmd, input_prev_action, demo_len, t, threshold):
         if t == 0:
