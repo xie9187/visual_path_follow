@@ -318,10 +318,11 @@ def finetuning(sess, robot_name='robot1'):
             
             if demo_flag and demo_append_flag and env.distance < 1.0:
                 demo_append_flag = False
-                demo_img_seq[0, demo_cnt, :, :, :] = rgb_image
-                demo_cmd_seq[0, demo_cnt, 0] = int(world.cmd_list[demo_cnt])
-                print 'append cmd: ', int(world.cmd_list[demo_cnt])
-                demo_cnt += 1
+                if demo_cnt < len(world.cmd_list):
+                    demo_img_seq[0, demo_cnt, :, :, :] = rgb_image
+                    demo_cmd_seq[0, demo_cnt, 0] = int(world.cmd_list[demo_cnt])
+                    print 'append cmd: ', int(world.cmd_list[demo_cnt])
+                    demo_cnt += 1
             elif demo_flag and env.distance > 1.05:
                 demo_append_flag = True
 
