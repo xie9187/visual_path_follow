@@ -74,10 +74,13 @@ class deep_metric(object):
 
         # encoding
         demo_vect = self.encode_image(demo_img, activation=None) # b, dim_img_feat
+        demo_vect = tf.nn.l2_normalize(demo_vect, axis=1)
         demo_vect = tf.tile(tf.expand_dims(demo_vect, axis=1), [1, self.max_len, 1]) # b, l, dim_img_feat
         dim_img_feat = demo_vect.get_shape().as_list()[-1]
         posi_vect = tf.reshape(self.encode_image(posi_img), [-1, self.max_len, dim_img_feat]) # b, l, dim_img_feat
+        posi_vect = tf.nn.l2_normalize(posi_vect, axis=2)
         nega_vect = tf.reshape(self.encode_image(nega_img), [-1, self.max_len, dim_img_feat]) # b, l, dim_img_feat
+        nega_vect = tf.nn.l2_normalize(nega_vect, axis=2)
 
         if self.dist == 'cos':
             # cos similarity
@@ -125,7 +128,7 @@ class deep_metric(object):
             mean_nega_dist = tf.reduce_sum(nega_dist*nega_mask)/tf.reduce_sum(nega_mask)
 
             # loss
-            loss = mean_posi_dist + self.alpha - mean_nega_dist - mean_extreme_dist
+            loss = tf.nn.relu(mean_posi_dist + self.alpha - mean_nega_dist)
             # metric
             min_nega_dist = tf.tile(tf.reduce_min(nega_dist, axis=1, keepdims=True), [1, self.max_len]) # b, l
             less = tf.less(posi_dist * posi_mask, min_nega_dist * posi_mask) # b, l

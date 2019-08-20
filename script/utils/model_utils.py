@@ -1,5 +1,5 @@
 import tensorflow as tf
-
+import numpy as np
 
 # RNN
 def _lstm_cell(n_hidden, n_layers, name=None, layer_norm=False):
@@ -213,3 +213,9 @@ def cos_sim(a, b, axis=None):
     norm_a = safe_norm(a, axis)
     norm_b = safe_norm(b, axis)
     return tf.reduce_sum(a * b, axis=axis) / (norm_a * norm_b)
+
+def l2_normalise(x, axis):
+    l2_norm = tf.expand_dims(safe_norm(x, axis=axis), axis=axis)
+    scale = np.asarray(x.get_shape().as_list()[1:]) / np.asarray(l2_norm.get_shape().as_list()[1:])
+    scale = np.r_[1, scale]
+    return x/tf.tile(l2_norm, scale)

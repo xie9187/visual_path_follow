@@ -19,7 +19,7 @@ RANDOM_SEED = 1234
 flag = tf.app.flags
 
 # network param
-flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 8, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-6, 'Learning rate.')
 flag.DEFINE_integer('max_len', 20, 'sample numbers in training')
 flag.DEFINE_float('alpha', 1., 'alpha margin')
@@ -174,13 +174,13 @@ def main():
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:#
         model = deep_metric.deep_metric(sess=sess,
-                                            batch_size=flags.batch_size,
-                                            max_len=flags.max_len,
-                                            dim_img=[flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c],
-                                            learning_rate=flags.learning_rate,
-                                            gpu_num=flags.gpu_num,
-                                            alpha=flags.alpha,
-                                            dist=flags.dist)
+                                        batch_size=flags.batch_size,
+                                        max_len=flags.max_len,
+                                        dim_img=[flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c],
+                                        learning_rate=flags.learning_rate,
+                                        gpu_num=flags.gpu_num,
+                                        alpha=flags.alpha,
+                                        dist=flags.dist)
         if flags.online_test:
             pass
         elif flags.offline_test:

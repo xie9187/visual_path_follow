@@ -9,12 +9,13 @@ import random
 import rospy
 import utils.data_utils as data_utils
 import matplotlib.pyplot as plt
+import  as commander_model
 
 from data_generation.GazeboRoomDataGenerator import GridWorld, FileProcess
 from data_generation.GazeboWorld import GazeboWorld
 from utils.model_utils import variable_summaries
 from model.drqn import DRQN
-
+from model.visual_commander import visual_commander
 
 CWD = os.getcwd()
 RANDOM_SEED = 1234
@@ -28,8 +29,8 @@ flag.DEFINE_integer('max_epi_step', 200, 'max step.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
 flag.DEFINE_integer('n_cmd_type', 4, 'number of cmd class.')
-flag.DEFINE_integer('dim_rgb_h', 192, 'input rgb image height.') # 96
-flag.DEFINE_integer('dim_rgb_w', 256, 'input rgb image width.') # 128
+flag.DEFINE_integer('dim_rgb_h', 96, 'input rgb image height.') # 96
+flag.DEFINE_integer('dim_rgb_w', 128, 'input rgb image width.') # 128
 flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
 flag.DEFINE_integer('dim_depth_h', 64, 'input depth image height.') 
 flag.DEFINE_integer('dim_depth_w', 64, 'input depth image width.') 
@@ -45,6 +46,19 @@ flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
 flag.DEFINE_boolean('dueling', False, 'dueling network')
 flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
 
+# commander param
+flag.DEFINE_integer('max_step', 300, 'max step.')
+flag.DEFINE_integer('max_n_demo', 10, 'max number of instructions')
+flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
+flag.DEFINE_string('demo_mode', 'hard', 'the mode of process guidance (hard, sum)')
+flag.DEFINE_string('post_att_model', 'gru', 'the model to use after attention (gru, dense, none)')
+flag.DEFINE_integer('inputs_num', 3, 'how many kinds of inputs used (2, 4)')
+flag.DEFINE_float('keep_prob', 1.0, 'keep probability of drop out')
+flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
+flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
+flag.DEFINE_float('threshold', 0.6, 'prob threshold in commander')
+flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
+
 # training param
 flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
@@ -57,7 +71,8 @@ flag.DEFINE_boolean('supervision', False, 'supervised learning')
 flag.DEFINE_boolean('load_network', False, 'load model learning')
 flag.DEFINE_float('label_action_rate', 0.00, 'rate of using labelled action')
 flag.DEFINE_boolean('zip_img', False, 'save img as uint8')
-
+flag.DEFINE_boolean('finetune', False, 'load commander and finetue controller')
+flag.DEFINE_string('commander_model_name', 'vc_hard_gru_reinforce-finetune_cnn', 'commander model name.')
 
 # noise param
 flag.DEFINE_float('init_epsilon', 0.1, 'init_epsilon')
@@ -67,7 +82,7 @@ flag.DEFINE_integer('observe_steps', 2000, 'observe_steps')
 
 flags = flag.FLAGS
 
-def main(sess, robot_name='robot1'):
+def training(sess, robot_name='robot1'):
     # init environment
     env = GazeboWorld(robot_name, rgb_size=[flags.dim_rgb_w, flags.dim_rgb_h], 
                                 depth_size=[flags.dim_depth_w, flags.dim_depth_h])
@@ -101,7 +116,7 @@ def main(sess, robot_name='robot1'):
 
     # model saver
     if flags.test:
-        saver = tf.train.Saver(trainable_var, max_to_keep=3, save_relative_paths=True) 
+        saver = tf.train.Saver(trainable_var) 
     else:
         saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
     sess.run(tf.global_variables_initializer())
@@ -341,6 +356,6 @@ if __name__ == '__main__':
     # config = tf.ConfigProto(allow_soft_placement=True)
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    with tf.Session(config=config) as sess:#
-        main(sess)
+    with tf.Session(config=config) as sess:
+        training(sess)
         # model_test(sess)

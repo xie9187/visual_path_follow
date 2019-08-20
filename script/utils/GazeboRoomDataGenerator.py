@@ -470,18 +470,18 @@ class GridWorld(object):
                 goal_idx += 1
             goal_seq.append(goal_list[goal_idx])
 
-        # slightly randomise command position
-        if not test:
-            show_table = copy .deepcopy(self.table)
-            for t in xrange(len(path)-2):
-                if self.check_neighbour_zeros(self.table, path[t], 1) == 3 and \
-                    cmd_seq[t+1] in [1, 3] and cmd_seq[t+2] not in [1, 3] and np.random.rand() < 0.5:
-                    cmd_seq[t] = copy.deepcopy(cmd_seq[t+1])
-                    cmd_seq[t+1] = copy.deepcopy(2)
+        # # slightly randomise command position
+        # if not test:
+        #     show_table = copy .deepcopy(self.table)
+        #     for t in xrange(len(path)-2):
+        #         if self.check_neighbour_zeros(self.table, path[t], 1) == 3 and \
+        #             cmd_seq[t+1] in [1, 3] and cmd_seq[t+2] not in [1, 3] and np.random.rand() < 0.5:
+        #             cmd_seq[t] = copy.deepcopy(cmd_seq[t+1])
+        #             cmd_seq[t+1] = copy.deepcopy(2)
 
-                show_table[path[t][1], path[t][0]] = cmd_seq[t]+5
-            show_table[path[-2][1], path[-2][0]] = cmd_seq[-2]+5
-            show_table[path[-1][1], path[-1][0]] = 9
+        #         show_table[path[t][1], path[t][0]] = cmd_seq[t]+5
+        #     show_table[path[-2][1], path[-2][0]] = cmd_seq[-2]+5
+        #     show_table[path[-1][1], path[-1][0]] = 9
 
             
             # fig=plt.figure(figsize=(8, 6))
