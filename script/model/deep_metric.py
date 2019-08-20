@@ -73,7 +73,7 @@ class deep_metric(object):
         nega_img = tf.reshape(nega_img, [-1]+self.dim_img) #b*l,h,d,c
 
         # encoding
-        demo_vect = self.encode_image(demo_img, activation=None) # b, dim_img_feat
+        demo_vect = self.encode_image(demo_img) # b, dim_img_feat
         demo_vect = tf.nn.l2_normalize(demo_vect, axis=1)
         demo_vect = tf.tile(tf.expand_dims(demo_vect, axis=1), [1, self.max_len, 1]) # b, l, dim_img_feat
         dim_img_feat = demo_vect.get_shape().as_list()[-1]
