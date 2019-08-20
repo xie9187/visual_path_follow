@@ -19,7 +19,7 @@ RANDOM_SEED = 1234
 flag = tf.app.flags
 
 # network param
-flag.DEFINE_integer('batch_size', 8, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-6, 'Learning rate.')
 flag.DEFINE_integer('max_len', 20, 'sample numbers in training')
 flag.DEFINE_float('alpha', 1., 'alpha margin')
@@ -35,7 +35,7 @@ flag.DEFINE_string('data_dir',  '/mnt/Work/catkin_ws/data/vpf_data/mini',
                     'Data directory')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', 'deep_metric', 'model name.')
-flag.DEFINE_integer('max_epoch', 10, 'max epochs.')
+flag.DEFINE_integer('max_epoch', 50, 'max epochs.')
 flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('online_test', False, 'online test.')
@@ -160,7 +160,7 @@ def training(sess, model):
                                               })
         summary_writer.add_summary(summary, epoch)
         
-        if flags.save_model:
+        if flags.save_model and (epoch+1)%10 == 0:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
 
             dist_name = os.path.join(model_dir, 'epoch_{:d}_posi_dist.csv'.format(epoch))
