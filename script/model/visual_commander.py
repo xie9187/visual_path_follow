@@ -304,6 +304,8 @@ class visual_commander(object):
         demo_dense_seq = tf.tile(tf.expand_dims(demo_dense, axis=1), [1, self.max_step, 1]) # b, l, n_hidden
         demo_dense_seq = tf.reshape(demo_dense_seq, [-1, self.n_hidden]) # b*l, n_hidden
 
+        self.l2_norm = tf.zeros([self.batch_size*self.max_step, self.max_n_demo], dtype=tf.float32)
+
         return demo_dense_seq, demo_dense
 
     def process_demo_hard_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag, demo_len, stochastic_flag):
