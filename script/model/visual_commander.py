@@ -151,7 +151,7 @@ class visual_commander(object):
         if self.demo_mode == 'sum':
             demo_dense_seq, _ = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b*l, n_hidden
             att_pos = tf.zeros([self.batch_size, self.max_step], dtype=tf.int32)
-            att_loss = tf.zeros(dtype=tf.float32)
+            att_loss = tf.zeros([], dtype=tf.float32)
         elif self.demo_mode == 'hard':
             demo_dense_seq, att_pos, att_logits, prob, _ = self.process_demo_hard_att(input_demo_img, 
                                                                                    input_demo_cmd, 
