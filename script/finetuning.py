@@ -74,6 +74,7 @@ flag.DEFINE_boolean('supervision', False, 'supervised learning')
 flag.DEFINE_boolean('load_network', False, 'load model learning')
 flag.DEFINE_float('label_action_rate', 0.00, 'rate of using labelled action')
 flag.DEFINE_boolean('zip_img', False, 'save img as uint8')
+flag.DEFINE_boolean('gt_cmd', False, 'use ground truth command')
 
 # noise param
 flag.DEFINE_float('init_epsilon', 0.1, 'init_epsilon')
@@ -298,7 +299,10 @@ def finetuning(sess, robot_name='robot1'):
                 env.PublishDemoRGBImage(demo_img_seq[0, att_pos], att_pos)
 
                 prev_one_hot_action = copy.deepcopy(one_hot_action)
-                q, gru_h_out = agent.ActionPredict([depth_stack], [[pred_cmd]], [prev_one_hot_action], gru_h_in)
+                if flags.gt_cmd:
+                    q, gru_h_out = agent.ActionPredict([depth_stack], [[cmd]], [prev_one_hot_action], gru_h_in)
+                else:
+                    q, gru_h_out = agent.ActionPredict([depth_stack], [[pred_cmd]], [prev_one_hot_action], gru_h_in)
                 if T < flags.observe_steps and not flags.test:
                     action_index = np.random.randint(flags.dim_action)
                 elif random.random() <= epsilon and not flags.test:
