@@ -159,7 +159,8 @@ def finetuning(sess, robot_name='robot1'):
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if demo_flag:
-            if not flags.test and episode % 40 == 0:
+            # if not flags.test and episode % 40 == 0:
+            if episode % 40 == 0:
                 print 'randomising the environment'
                 env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
                 world.RandomTableAndMap()
@@ -170,12 +171,13 @@ def finetuning(sess, robot_name='robot1'):
                     env.SetObjectPose(name, obj_pose_dict[name])
                 time.sleep(1.)
                 print 'randomisation finished'
-            elif flags.test:
-                world.FixedTableAndMap()
-                world.GetAugMap()
-                obj_list = env.GetModelStates()
+            # elif flags.test:
+            #     world.FixedTableAndMap()
+            #     world.GetAugMap()
+            #     obj_list = env.GetModelStates()
             try:
-                table_route, map_route, real_route, init_pose = world.RandomPath()
+                # table_route, map_route, real_route, init_pose = world.RandomPath()
+                table_route, map_route, real_route, init_pose = world.RandomPath(False)
                 timeout_flag = False
             except:
                 timeout_flag = True
@@ -377,6 +379,7 @@ def finetuning(sess, robot_name='robot1'):
                 demo_lens[demo_cnt-1] += 1
                 if result == 2:
                     success_nums[demo_cnt-1] += 1
+                print 'demo cnt: ', demo_cnt
                 info_shows = '| Episode:{:3d}'.format(episode) + \
                              '| t:{:3d}'.format(t) + \
                              '| T:{:5d}'.format(T) + \
