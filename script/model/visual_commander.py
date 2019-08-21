@@ -150,7 +150,8 @@ class visual_commander(object):
         # process demo
         if self.demo_mode == 'sum':
             demo_dense_seq, _ = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b*l, n_hidden
-            att_pos = None
+            att_pos = tf.zeros([self.batch_size, self.max_step], dtype=tf.int32)
+            att_loss = tf.zeros([self.batch_size], dtype=tf.float32)
         elif self.demo_mode == 'hard':
             demo_dense_seq, att_pos, att_logits, prob, _ = self.process_demo_hard_att(input_demo_img, 
                                                                                    input_demo_cmd, 
@@ -213,17 +214,15 @@ class visual_commander(object):
         all_correct_num = tf.reduce_sum(tf.cast(correct_pred, tf.int32)) # scalar
         all_accuracy = tf.cast((all_correct_num - tf.reduce_sum(1-pred_mask)), tf.float32)/tf.cast(tf.reduce_sum(pred_mask), tf.float32)
 
-        # reinforce
-        sample_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=att_logits, labels=att_pos) * loss_mask # b*l
-        sample_loss = tf.reduce_sum(sample_loss)/tf.reduce_sum(loss_mask)
-        reward_estimate = model_utils.reward_estimate(all_inputs, all_accuracy) * loss_mask # b*l
-        select_loss = sample_loss * tf.stop_gradient(reward_estimate) # b*l
-        select_loss = tf.reduce_sum(select_loss/tf.reduce_sum(loss_mask)) # scalar
-        baseline_loss = tf.reduce_sum(tf.square(reward_estimate))/tf.reduce_sum(loss_mask)
-        att_loss = select_loss + baseline_loss
-
-        # attention position
         if self.demo_mode == 'hard':
+            # reinforce
+            sample_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=att_logits, labels=att_pos) * loss_mask # b*l
+            sample_loss = tf.reduce_sum(sample_loss)/tf.reduce_sum(loss_mask)
+            reward_estimate = model_utils.reward_estimate(all_inputs, all_accuracy) * loss_mask # b*l
+            select_loss = sample_loss * tf.stop_gradient(reward_estimate) # b*l
+            select_loss = tf.reduce_sum(select_loss/tf.reduce_sum(loss_mask)) # scalar
+            baseline_loss = tf.reduce_sum(tf.square(reward_estimate))/tf.reduce_sum(loss_mask)
+            att_loss = select_loss + baseline_loss
             att_mask = tf.sequence_mask(seq_len, maxlen=self.max_step, dtype=att_pos.dtype) # b, l
             att_pos = tf.reshape(att_pos, [-1, self.max_step]) * att_mask # b, l
 
@@ -241,6 +240,9 @@ class visual_commander(object):
         # process demo
         if self.demo_mode == 'sum':
             _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len) # b, n_hidden
+            att_pos = tf.zeros([1, 1], dtype=tf.int32)
+            prob = tf.zeros([1, self.max_n_demo], dtype=tf.float32)
+            l2_norm = tf.zeros([1, self.max_n_demo], dtype=tf.float32)
         elif self.demo_mode == 'hard':
             demo_dense, att_pos, att_logits, prob, l2_norm = self.process_demo_hard_att(input_demo_img, 
                                                                                   input_demo_cmd, 
