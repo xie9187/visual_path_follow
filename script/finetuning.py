@@ -147,7 +147,7 @@ def finetuning(sess, robot_name='robot1'):
         tf.summary.scalar('reward', reward_ph)
         tf.summary.scalar('q_estimate', q_ph)
         merged = tf.summary.merge_all()
-        summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
+        summary_writer = tf.summary.FileWriter(finetuned_model_dir, sess.graph)
 
     # initialise env
     env = GazeboWorld(robot_name, rgb_size=[flags.dim_rgb_w, flags.dim_rgb_h])
