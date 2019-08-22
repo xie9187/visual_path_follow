@@ -141,6 +141,13 @@ def finetuning(sess, robot_name='robot1'):
 
     finetuned_controller_saver = tf.train.Saver(controller_var, max_to_keep=3, save_relative_paths=True)
 
+    if not flags.test:
+        reward_ph = tf.placeholder(tf.float32, [], name='reward')
+        q_ph = tf.placeholder(tf.float32, [], name='q_pred')
+        tf.summary.scalar('reward', reward_ph)
+        tf.summary.scalar('q_estimate', q_ph)
+        merged = tf.summary.merge_all()
+        summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
     # initialise env
     env = GazeboWorld(robot_name, rgb_size=[flags.dim_rgb_w, flags.dim_rgb_h])
