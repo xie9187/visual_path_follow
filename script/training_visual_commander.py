@@ -335,7 +335,7 @@ def main():
                                  stochastic_hard=flags.stochastic_hard,
                                  load_cnn=flags.load_cnn,
                                  threshold=flags.threshold,
-                                 metric_model=flags.metric_model,
+                                 metric_model=metric_model,
                                  metric_only=flags.metric_only)
         if flags.offline_test:
             offline_testing(sess, model)
