@@ -197,7 +197,7 @@ def training(sess, model):
                                                                                img_size,
                                                                                flags.max_len)
                 batch_data += metric_batch_data
-            acc, loss, _, _, _ = model.valid(batch_data)
+            acc, loss, _, _, _, _ = model.valid(batch_data)
 
             loss_list.append(loss)
             acc_list.append(acc)
