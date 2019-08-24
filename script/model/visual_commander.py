@@ -161,8 +161,7 @@ class visual_commander(object):
                                                                                    input_demo_cmd, 
                                                                                    img_vect, 
                                                                                    False, 
-                                                                                   demo_len,
-                                                                                   self.stochastic_hard)
+                                                                                   demo_len)
         # post-attention inputs
         # dropouts
         if not self.test:
