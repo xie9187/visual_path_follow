@@ -59,6 +59,7 @@ flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
 flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
 flag.DEFINE_float('threshold', 0.6, 'prob threshold in commander')
 flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
+flag.DEFINE_boolean('metric_only', False, 'only use deep metric network')
 
 # training param
 flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
@@ -106,7 +107,8 @@ def finetuning(sess, robot_name='robot1'):
                                              loss_rate=flags.loss_rate,
                                              stochastic_hard=flags.stochastic_hard,
                                              load_cnn=flags.load_cnn,
-                                             threshold=flags.threshold)
+                                             threshold=flags.threshold,
+                                             metric_only=flags.metric_only)
     agent = DRQN(flags, sess, len(tf.trainable_variables()))
 
     # initialise model
@@ -167,20 +169,20 @@ def finetuning(sess, robot_name='robot1'):
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if demo_flag:
-            # if episode % 40 == 0:
-            #     print 'randomising the environment'
-            #     env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
-            #     world.RandomTableAndMap()
-            #     world.GetAugMap()
-            #     obj_list = env.GetModelStates()
-            #     obj_pose_dict = world.AllocateObject(obj_list)
-            #     for name in obj_pose_dict:
-            #         env.SetObjectPose(name, obj_pose_dict[name])
-            #     time.sleep(1.)
-            #     print 'randomisation finished'
-            world.FixedTableAndMap()
-            world.GetAugMap()
-            obj_list = env.GetModelStates()
+            if episode % 40 == 0:
+                print 'randomising the environment'
+                env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
+                world.RandomTableAndMap()
+                world.GetAugMap()
+                obj_list = env.GetModelStates()
+                obj_pose_dict = world.AllocateObject(obj_list)
+                for name in obj_pose_dict:
+                    env.SetObjectPose(name, obj_pose_dict[name])
+                time.sleep(1.)
+                print 'randomisation finished'
+            # world.FixedTableAndMap()
+            # world.GetAugMap()
+            # obj_list = env.GetModelStates()
             try:
                 # table_route, map_route, real_route, init_pose = world.RandomPath()
                 table_route, map_route, real_route, init_pose = world.RandomPath(False)
@@ -295,8 +297,6 @@ def finetuning(sess, robot_name='robot1'):
                                                          demo_len=[demo_cnt], 
                                                          t=t,
                                                          threshold=flags.threshold)
-                # if pred_cmd == 0:
-                #     pred_cmd = 2 
                 if (prev_pred_cmd == 2 and pred_cmd != 2) or (prev_pred_cmd != 2 and pred_cmd == 2):
                     last_pred_cmd = prev_pred_cmd
                 combined_cmd = last_pred_cmd * flags.n_cmd_type + pred_cmd

@@ -13,6 +13,9 @@ import progressbar
 import rospy
 import matplotlib.pyplot as plt
 
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+
 CWD = os.getcwd()
 RANDOM_SEED = 1234
 
@@ -169,6 +172,69 @@ def training(sess, model):
             dist_name = os.path.join(model_dir, 'epoch_{:d}_nega_dist.csv'.format(epoch))
             data_utils.save_file(dist_name, nega_dist)
 
+def offline_test(sess, model):
+    seg_point = 9
+
+    batch_size = flags.batch_size
+    img_size = [flags.dim_rgb_h, flags.dim_rgb_w]
+
+    data = data_utils.read_data_to_mem(flags.data_dir, flags.max_step, [flags.dim_rgb_h, flags.dim_rgb_w])
+    train_data = data[:len(data)*seg_point/10]
+    valid_data = data[len(data)*seg_point/10:]
+
+    model_dir = os.path.join(flags.model_dir, flags.model_name)
+    if not os.path.exists(model_dir): 
+        os.makedirs(model_dir)
+
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+    sess.run(init_op)
+
+    trainable_var = tf.trainable_variables()
+    part_var = []
+    for idx, v in enumerate(trainable_var):
+        print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
+
+    saver = tf.train.Saver(trainable_var)
+
+    checkpoint = tf.train.get_checkpoint_state(model_dir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+        saver.restore(sess, checkpoint.model_checkpoint_path)
+        print 'model loaded: ', checkpoint.model_checkpoint_path 
+    else:
+        print 'model not found'
+
+    sample_start_time = time.time()
+    batch_data = data_utils.get_a_batch(data, 79, 1, 300, img_size, 10)
+    demo_img, _, input_img, _, _, _, _, _, _ = batch_data
+    demo_img = demo_img[0]
+    input_img = input_img[0]
+    img_0 = input_img[:46]
+    img_1 = input_img[61:120]
+    img_2 = input_img[133:193]
+    imgs = np.r_[img_0, img_1, img_2]
+    img_v = model.embed_img(imgs)
+    l2_norms = []
+    for vect in img_v:
+        demo_v = np.repeat(np.expand_dims(vect, axis=0), len(img_v), axis=0)
+        l2_norm = np.linalg.norm(img_v - demo_v, axis=1)
+        l2_norms.append(l2_norm)
+    l2_norms = np.stack(l2_norms, axis=0)
+    plt.imshow(l2_norms)
+    plt.colorbar()
+    plt.show()
+
+    # t-sne
+    # classes = np.r_[np.zeros([46-0]), np.ones([(120-61)]), np.ones([193-133])*2]
+
+    # tsne = TSNE(n_components=2, random_state=0)
+    # vect_2d = tsne.fit_transform(img_v)
+    # color = ['r', 'g', 'b']
+    # colors = [color[int(cate)] for cate in classes]
+    # labels = ['negative', 'positive', 'demo']
+    # plt.scatter(vect_2d[:, 0], vect_2d[:, 1], c=colors)
+    # plt.legend()
+    # plt.show()
+
 def main():
     config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
@@ -184,7 +250,7 @@ def main():
         if flags.online_test:
             pass
         elif flags.offline_test:
-            pass
+            offline_test(sess, model)
         else:
             training(sess, model)
             

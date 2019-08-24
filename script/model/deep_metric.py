@@ -35,7 +35,8 @@ class deep_metric(object):
                       self.nega_img,
                       self.posi_len,
                       self.nega_len]
-            gpu_accuracy, gpu_loss, gpu_posi_dist, gpu_nega_dist = self.multi_gpu_model(inputs)
+            outputs = self.multi_gpu_model(inputs)
+            gpu_accuracy, gpu_loss, gpu_posi_dist, gpu_nega_dist = outputs
             self.accuracy = tf.reduce_mean(gpu_accuracy)
             self.loss = tf.reduce_mean(gpu_loss)
             self.posi_dist = tf.concat(gpu_posi_dist, axis=0)
@@ -74,6 +75,7 @@ class deep_metric(object):
 
         # encoding
         demo_vect = self.encode_image(demo_img) # b, dim_img_feat
+        self.img_v = demo_vect
         demo_vect = tf.nn.l2_normalize(demo_vect, axis=1)
         demo_vect = tf.tile(tf.expand_dims(demo_vect, axis=1), [1, self.max_len, 1]) # b, l, dim_img_feat
         dim_img_feat = demo_vect.get_shape().as_list()[-1]
@@ -165,4 +167,10 @@ class deep_metric(object):
             self.nega_img: nega_img,
             self.posi_len: posi_len,
             self.nega_len: nega_len
+            })
+
+    def embed_img(self, data):
+        img = data
+        return self.sess.run(self.img_v, feed_dict={
+            self.demo_img: img
             })

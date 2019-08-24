@@ -78,7 +78,7 @@ class GridWorld(object):
                                [1, 1, 0, 1, 1, 1, 1, 0, 1, 0],
                                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                                [0, 1, 1, 1, 1, 1, 1, 0, 1, 1],
-                               [0, 0, 0, 1, 0, 0, 1, 0, 1, 0],
+                               [0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
                                [0, 1, 0, 1, 0, 1, 1, 0, 1, 0],
                                [0, 1, 0, 1, 0, 0, 0, 1, 0, 0],
                                [0, 1, 0, 0, 0, 1, 1, 0, 0, 0]], dtype=np.float32)
@@ -279,24 +279,27 @@ class GridWorld(object):
                    y_max = np.amin([y+augment_area+1, self.map_size])
                    self.aug_map[y_min:y_max, x_min:x_max]= 1
 
-    def RandomPath(self, long_path=True):
+    def RandomPath(self, long_path=True, fix_path=False):
         map_path = []
         real_path = []
         dist = 0.
         t = 0
         for t in range(200):
             assert t < 199, 'timeout'
-
-            init_table_pos = np.random.randint(0, self.table_size, size=[2])
-            goal_table_pos = np.random.randint(0, self.table_size, size=[2])
-            # if self.check_neighbour_zeros(self.table, init_table_pos) > 4:
-            #     continue
-            if self.table[init_table_pos[1], init_table_pos[0]] != 0 or self.table[goal_table_pos[1], goal_table_pos[0]] != 0:
-                continue
-            init_map_pos = init_table_pos * self.grid_size + self.grid_size/2
-            goal_map_pos = goal_table_pos * self.grid_size + self.grid_size/2
-            if self.aug_map[init_map_pos[1], init_map_pos[0]] * self.aug_map[goal_map_pos[1], goal_map_pos[0]] == 1:
-                continue
+            if fix_path:
+                init_table_pos = np.array([3, 0], dtype=np.int32)
+                goal_table_pos = np.array([7, 5], dtype=np.int32)
+            else:
+                init_table_pos = np.random.randint(0, self.table_size, size=[2])
+                goal_table_pos = np.random.randint(0, self.table_size, size=[2])
+                # if self.check_neighbour_zeros(self.table, init_table_pos) > 4:
+                #     continue
+                if self.table[init_table_pos[1], init_table_pos[0]] != 0 or self.table[goal_table_pos[1], goal_table_pos[0]] != 0:
+                    continue
+                init_map_pos = init_table_pos * self.grid_size + self.grid_size/2
+                goal_map_pos = goal_table_pos * self.grid_size + self.grid_size/2
+                if self.aug_map[init_map_pos[1], init_map_pos[0]] * self.aug_map[goal_map_pos[1], goal_map_pos[0]] == 1:
+                    continue
             table_path, map_path, real_path = self.GetPathFromTable([init_table_pos[0], 
                                                                      init_table_pos[1], 
                                                                      goal_table_pos[0], 

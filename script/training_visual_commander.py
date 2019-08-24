@@ -53,6 +53,7 @@ flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
 flag.DEFINE_float('threshold', 0.6, 'prob threshold in commander')
 flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
 flag.DEFINE_boolean('metric_learning', False, 'metric learning')
+flag.DEFINE_boolean('metric_only', False, 'only use deep metric network')
 
 # metric param
 flag.DEFINE_integer('max_len', 20, 'sample numbers in training')
@@ -257,7 +258,7 @@ def offline_testing(sess, model):
         print 'batch: ', batch_id
         fig, axes = plt.subplots(batch_size/2, 2, sharex=True, figsize=(8,12))
         batch_data = data_utils.get_a_batch(data, batch_id*batch_size, batch_size, max_step, img_size, max_n_demo)
-        acc, loss, pred_cmd, att_pos, l2_norm = model.valid(batch_data)
+        acc, loss, pred_cmd, att_pos, l2_norm, prob = model.valid(batch_data)
         for i in xrange(batch_size):
             demo_img_seq = batch_data[0][i, :, :, :]
             demo_cmd_seq = batch_data[1][i, :]
@@ -291,6 +292,9 @@ def offline_testing(sess, model):
         plt.savefig(fig_name)
         plt.clf()
 
+        dist_name = os.path.join(model_dir, 'batch_{:d}_prob.csv'.format(batch_id))
+        data_utils.save_file(dist_name, prob)
+
         dist_name = os.path.join(model_dir, 'batch_{:d}_norm.csv'.format(batch_id))
         data_utils.save_file(dist_name, l2_norm)
 
@@ -298,7 +302,7 @@ def main():
     config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:#
-        if flags.metric_learning:
+        if flags.metric_learning or flags.metric_only:
             metric_model = deep_metric(sess=sess,
                                        batch_size=flags.batch_size,
                                        max_len=flags.max_len,
@@ -331,7 +335,8 @@ def main():
                                  stochastic_hard=flags.stochastic_hard,
                                  load_cnn=flags.load_cnn,
                                  threshold=flags.threshold,
-                                 metric_model=metric_model)
+                                 metric_model=metric_model,
+                                 metric_only=metric_only)
         if flags.offline_test:
             offline_testing(sess, model)
         else:
