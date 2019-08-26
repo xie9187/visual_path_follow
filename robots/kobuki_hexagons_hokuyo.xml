@@ -848,8 +848,8 @@
           <height>480</height>
         </image>
         <clip>
-          <near>0.05</near>
-          <far>8.0</far>
+          <near>0.01</near>
+          <far>10.0</far>
         </clip>
       </camera>
       <plugin filename="libgazebo_ros_openni_kinect.so" name="kinect_camera_controller">
