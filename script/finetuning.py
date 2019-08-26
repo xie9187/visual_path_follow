@@ -62,7 +62,7 @@ flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
 flag.DEFINE_boolean('metric_only', False, 'only use deep metric network')
 
 # training param
-flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
+flag.DEFINE_integer('max_training_step', 500000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('commander_model_name', 'vc_hard_gru_reinforce-finetune_cnn', 'commander model name.')
 flag.DEFINE_string('controller_model_name', 'drqn', 'controller model name.')
@@ -80,7 +80,7 @@ flag.DEFINE_boolean('gt_cmd', False, 'use ground truth command')
 # noise param
 flag.DEFINE_float('init_epsilon', 0.1, 'init_epsilon')
 flag.DEFINE_float('final_epsilon', 0.0001, 'final_epsilon')
-flag.DEFINE_integer('explore_steps', 1000000, 'explore_steps')
+flag.DEFINE_integer('explore_steps', 500000, 'explore_steps')
 flag.DEFINE_integer('observe_steps', 2000, 'observe_steps')
 
 flags = flag.FLAGS
@@ -297,6 +297,8 @@ def finetuning(sess, robot_name='robot1'):
                                                          demo_len=[demo_cnt], 
                                                          t=t,
                                                          threshold=flags.threshold)
+                if pred_cmd == 0:
+                    pred_cmd = 2
                 if (prev_pred_cmd == 2 and pred_cmd != 2) or (prev_pred_cmd != 2 and pred_cmd == 2):
                     last_pred_cmd = prev_pred_cmd
                 combined_cmd = last_pred_cmd * flags.n_cmd_type + pred_cmd

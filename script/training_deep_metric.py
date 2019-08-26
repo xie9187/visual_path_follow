@@ -212,6 +212,7 @@ def offline_test(sess, model):
     img_1 = input_img[61:120]
     img_2 = input_img[133:193]
     imgs = np.r_[img_0, img_1, img_2]
+    # imgs = input_img
     img_v = model.embed_img(imgs)
     l2_norms = []
     for vect in img_v:
@@ -222,6 +223,25 @@ def offline_test(sess, model):
     plt.imshow(l2_norms)
     plt.colorbar()
     plt.show()
+
+    idx_0 = [0,46]
+    idx_1 = [46,105]
+    idx_2 = [105,165]
+
+    idx_list = [idx_0, idx_1, idx_2]
+    same_dist = []
+    diff_dist = []
+    mean_norms = np.zeros([len(idx_list), len(idx_list)])
+    for x, x_idx in enumerate(idx_list):
+        for y, y_idx in enumerate(idx_list):
+            mean_norm = np.mean(l2_norms[y_idx[0]:y_idx[1], x_idx[0]:x_idx[1]])
+            mean_norms[y, x] = mean_norm
+            if x == y:
+                same_dist.append(mean_norm)
+            else:
+                diff_dist.append(mean_norm)
+    diff = np.mean(diff_dist) - np.mean(same_dist)
+    print mean_norms, diff
 
     # t-sne
     # classes = np.r_[np.zeros([46-0]), np.ones([(120-61)]), np.ones([193-133])*2]
