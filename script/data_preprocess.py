@@ -4,8 +4,10 @@ import os
 import sys
 import cv2
 import tensorflow as tf
-from model.flownet.flownet_s import get_flownet 
 import utils.data_utils as data_util
+import progressbar
+
+from model.flownet.flownet_s import get_flownet 
 
 def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
     # get flownet
@@ -21,34 +23,48 @@ def generate_flow_seq(file_path_number_list, data_path, batch_size, img_size):
 
         # prepare image sequence
         for file_path_number in file_path_number_list:
+            img_file_list = []
             img_seq_path = file_path_number + '_image'
-            img_file_list = os.listdir(img_seq_path)
-            img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
-            img_list = []
-            for img_file_name in img_file_list:
-                img_file_path = os.path.join(img_seq_path, img_file_name)
-                img, _ = data_util.read_img_file(img_file_path, img_size)
-                # Convert from RGB -> BGR
-                img = img[..., [2, 1, 0]]
-                img_list.append(img)
-            input_a = np.stack([img_list[0]] + img_list[:-1], axis=0)
-            input_b = np.stack(img_list, axis=0)
-            if input_a.max() > 1.0:
-                input_a = input_a / 255.0
-            if input_b.max() > 1.0:
-                input_b = input_b / 255.0
+            temp_img_file_list = os.listdir(img_seq_path)
+            temp_img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
+            for img_file_name in temp_img_file_list:
+                img_file_list.append(os.path.join(img_seq_path, img_file_name))
+
+            img_num = len(img_file_list)
+            batch_num = img_num/batch_size+int(img_num%batch_size>0)
+
+            if batch_num > 20:
+                print 'predict optic flow...'
+                bar = progressbar.ProgressBar(maxval=batch_num, \
+                                              widgets=[progressbar.Bar('=', '[', ']'), ' ', 
+                                                       progressbar.Percentage()])
             pred_flow_seq_list = []
-            for batch_id in xrange(len(img_list)/batch_size+int(len(img_list)%batch_size>0)):
+            for batch_id in xrange(batch_num):
                 start = batch_id * batch_size
-                end = min((batch_id + 1) * batch_size, len(img_list))
+                end = min((batch_id + 1) * batch_size + 1, img_num)
+                img_list = []
+                for img_file_path in img_file_list[start:end]:
+                    img, _ = data_util.read_img_file(img_file_path, img_size)
+                    # Convert from RGB -> BGR
+                    img = img[..., [2, 1, 0]]
+                    if img.max() > 1.0:
+                        img = img / 255.0
+                    img_list.append(img)
+
+                input_a = np.stack(img_list[:-1])
+                input_b = np.stack(img_list[1:])
                 input_a_batch = np.zeros([batch_size]+img_dim)
                 input_b_batch = np.zeros([batch_size]+img_dim)
-                input_a_batch[:end-start] = input_a[start:end]
-                input_b_batch[:end-start] = input_b[start:end]
+                input_a_batch[:end-start-1] = input_a[:end-start-1]
+                input_b_batch[:end-start-1] = input_b[:end-start-1]
                 pred_flow_seq_list.append(sess.run(pred_flow_tf, 
                                                    feed_dict={input_a_tf: input_a_batch,
                                                               input_b_tf: input_b_batch
-                                                              })[:end-start])
+                                                              })[:end-start-1])
+                if batch_num > 20:
+                    bar.update(batch_id)
+            if batch_num > 20:
+                bar.finish()
             pred_flow_seq = np.concatenate(pred_flow_seq_list, axis=0)
             pred_flow_list = np.split(pred_flow_seq, len(pred_flow_seq), axis=0)
 

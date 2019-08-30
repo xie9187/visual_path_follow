@@ -135,7 +135,7 @@ def main(sess, robot_name='robot1'):
             print 'randomisation finished'
 
         try:
-            table_route, map_route, real_route, init_pose = world.RandomPath()
+            table_route, map_route, real_route, init_pose = world.RandomPath(long_path=False)
             timeout_flag = False
         except:
             timeout_flag = True

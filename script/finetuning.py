@@ -169,23 +169,23 @@ def finetuning(sess, robot_name='robot1'):
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if demo_flag:
-            if episode % 40 == 0:
-                print 'randomising the environment'
-                env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
-                world.RandomTableAndMap()
-                world.GetAugMap()
-                obj_list = env.GetModelStates()
-                obj_pose_dict = world.AllocateObject(obj_list)
-                for name in obj_pose_dict:
-                    env.SetObjectPose(name, obj_pose_dict[name])
-                time.sleep(1.)
-                print 'randomisation finished'
-            # world.FixedTableAndMap()
-            # world.GetAugMap()
-            # obj_list = env.GetModelStates()
+            # if episode % 40 == 0:
+            #     print 'randomising the environment'
+            #     env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
+            #     world.RandomTableAndMap()
+            #     world.GetAugMap()
+            #     obj_list = env.GetModelStates()
+            #     obj_pose_dict = world.AllocateObject(obj_list)
+            #     for name in obj_pose_dict:
+            #         env.SetObjectPose(name, obj_pose_dict[name])
+            #     time.sleep(1.)
+            #     print 'randomisation finished'
+            world.FixedTableAndMap()
+            world.GetAugMap()
+            obj_list = env.GetModelStates()
             try:
-                # table_route, map_route, real_route, init_pose = world.RandomPath()
-                table_route, map_route, real_route, init_pose = world.RandomPath(False)
+                table_route, map_route, real_route, init_pose = world.RandomPath()
+                # table_route, map_route, real_route, init_pose = world.RandomPath(False)
                 timeout_flag = False
             except:
                 timeout_flag = True

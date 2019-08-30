@@ -71,6 +71,7 @@ flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('online_test', False, 'online test.')
 flag.DEFINE_boolean('offline_test', False, 'offline test test with batches.')
+flag.DEFINE_boolean('single_test', False, 'single test test with a sample sequence.')
 
 # noise param
 flag.DEFINE_float('mu', 0., 'mu')
@@ -298,6 +299,69 @@ def offline_testing(sess, model):
         dist_name = os.path.join(model_dir, 'batch_{:d}_norm.csv'.format(batch_id))
         data_utils.save_file(dist_name, l2_norm)
 
+def single_testing(sess, model):
+    batch_size = flags.batch_size
+    max_step = flags.max_step
+    img_size = [flags.dim_rgb_h, flags.dim_rgb_w]
+    max_n_demo = flags.max_n_demo
+
+    data = data_utils.read_data_to_mem(flags.data_dir, flags.max_step, [flags.dim_rgb_h, flags.dim_rgb_w])
+
+    model_dir = os.path.join(flags.model_dir, flags.model_name)
+
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+    sess.run(init_op)
+
+    trainable_var = tf.trainable_variables()
+    part_var = []
+    for idx, v in enumerate(trainable_var):
+        print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
+
+    saver = tf.train.Saver(trainable_var, max_to_keep=5, save_relative_paths=True)
+
+    checkpoint = tf.train.get_checkpoint_state(model_dir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+        saver.restore(sess, checkpoint.model_checkpoint_path)
+        print 'model loaded: ', checkpoint.model_checkpoint_path 
+    else:
+        print 'model not found'
+
+    plt.switch_backend('wxAgg') 
+    
+    fig, axes = plt.subplots(sharex=True, figsize=(6,4))
+    batch_data = data_utils.get_a_batch(data, 57, 1, max_step, img_size, max_n_demo)
+    acc, loss, pred_cmd, att_pos, l2_norm, prob = model.valid(batch_data)
+    i = 0
+    demo_img_seq = batch_data[0][i, :, :, :]
+    demo_cmd_seq = batch_data[1][i, :]
+    img_seq = batch_data[2][i, :, :, :]
+    prev_cmd_seq = batch_data[3][i, :]
+    a_seq = batch_data[4][i, :]
+    cmd_seq = batch_data[5][i, :]
+    demo_len = batch_data[6][i] 
+    seq_len = batch_data[7][i] 
+    demo_indicies = batch_data[8][i]
+
+    demo_pos = np.zeros([max_step], dtype=np.int64)
+    start = 0
+    for pos, end in enumerate(demo_indicies):
+        demo_pos[start:end] = pos
+        start = end
+
+    # plot
+    # plt.rcParams.update({'font.size': 22})
+    axes.plot(demo_pos[2:], '-', linewidth=2.0, label='guid_num')
+    axes.plot(att_pos[i, 2:], '--', linewidth=2.0, label='att_pos')
+    axes.plot(a_seq[2:, 1], '-', linewidth=1.0, label='$\omega$')
+    # leg = axes.legend(fontsize=15)
+    plt.xlabel('time step', fontsize=13)
+    # mng = plt.get_current_fig_manager()
+    # mng.frame.Maximize(True)
+    plt.show()
+    # fig_name = os.path.join(model_dir, 'batch_{:d}_result.png'.format(batch_id))
+    # plt.savefig(fig_name)
+    # plt.clf()
+
 def main():
     config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
@@ -339,6 +403,8 @@ def main():
                                  metric_only=flags.metric_only)
         if flags.offline_test:
             offline_testing(sess, model)
+        elif flags.single_test:
+            single_testing(sess, model)
         else:
             training(sess, model)
             

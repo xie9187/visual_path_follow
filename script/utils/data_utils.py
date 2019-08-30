@@ -235,9 +235,16 @@ def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
 
         # action sequence
         action_file_name = file_path_number + '_action.csv'
-        action_seq = np.reshape(read_csv_file(action_file_name), [-1, 2])
-        if len(action_seq) > max_step:
-            action_seq = action_seq[:max_step, :]
+        if os.path.isfile('action_file_name'):
+            action_seq = np.reshape(read_csv_file(action_file_name), [-1, 2])
+            if len(action_seq) > max_step:
+                action_seq = action_seq[:max_step, :]
+        else:
+            action_file_name = file_path_number + '_action.txt'
+            action_seq = np.reshape(read_csv_file(action_file_name), [-1, 3])
+            action_seq = action_seq[:, 1:]
+            if len(action_seq) > max_step:
+                action_seq = action_seq[:max_step, :]
 
         data.append([img_seq, flow_seq, action_seq])
         bar.update(file_id)
@@ -247,6 +254,22 @@ def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
                                                                       time.time() - start_time))
 
     return data
+
+def segment_long_seq_data(data, min_seq_len, max_seq_len):
+    segmented_data = []
+    for long_data_seq in data:
+        pos = 0
+        data_seq_len = len(long_data_seq[0])
+        seq_len = np.random.randint(min_seq_len, max_seq_len)
+        while pos + seq_len <= data_seq_len:
+            img_seq = long_data_seq[0][pos:pos+seq_len]
+            flow_seq = long_data_seq[1][pos:pos+seq_len]
+            action_seq = long_data_seq[2][pos:pos+seq_len]
+            segmented_data.append([img_seq, flow_seq, action_seq])
+            seq_len = np.random.randint(min_seq_len, max_seq_len)
+            pos += seq_len/4
+    return segmented_data
+
 
 def moving_average(x, window_len):
     x = np.reshape(x, [-1])
@@ -264,7 +287,7 @@ def img_normalisation(img_seq):
     img_seq[..., 2] /= 47.69464972
     return img_seq
     
-def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, lag=20):
+def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, lag=20, real_flag=False):
     start_time = time.time()
     batch_demo_img_seq = np.zeros([batch_size, max_demo_len, img_size[0], img_size[1], 3], dtype=np.float32)
     batch_demo_cmd_seq = np.zeros([batch_size, max_demo_len, 1], dtype=np.int32) 
@@ -290,11 +313,13 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         batch_a_seq[i, 1:len(action_seq), :] = action_seq[:-1, :]
 
         flow_seq = np.reshape(flow_seq, [-1])
-        smoothed_flow_seq = moving_average(flow_seq, 9) # l
+        window_size = 11 if real_flag else 9
+        smoothed_flow_seq = moving_average(flow_seq, window_size) 
+        threshold = 2.5 if real_flag else 1
         raw_cmd_seq = copy.deepcopy(smoothed_flow_seq)
-        raw_cmd_seq[raw_cmd_seq<=-1] = -1
-        raw_cmd_seq[raw_cmd_seq>=1] = 1
-        raw_cmd_seq[np.fabs(raw_cmd_seq)<1] = 0
+        raw_cmd_seq[raw_cmd_seq<=-threshold] = -threshold
+        raw_cmd_seq[raw_cmd_seq>=threshold] = threshold
+        raw_cmd_seq[np.fabs(raw_cmd_seq)<threshold] = 0
         raw_cmd_seq.astype(np.int32)
         # random left and right cmd
         if np.random.rand() < 0.5:
@@ -302,7 +327,8 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         
         # cmd_seq
         lagged_cmd_seq = raw_cmd_seq + 2
-        cmd_seq = np.r_[lagged_cmd_seq[lag:], np.ones_like(lagged_cmd_seq[:lag])*2]
+        lag_noise = random.randint(-3, 3) if real_flag else 0
+        cmd_seq = np.r_[lagged_cmd_seq[lag-lag_noise:], np.ones_like(lagged_cmd_seq[:lag-lag_noise])*2]
         cmd_seq[-10:] = 0
         batch_prev_cmd_seq[i, 0, :] = np.expand_dims(cmd_seq[0], axis=0) # 1
         batch_prev_cmd_seq[i, 1:len(cmd_seq), :] = np.expand_dims(cmd_seq[:-1], axis=1) # l, 1
@@ -337,20 +363,20 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         batch_demo_len[i] = len(batch_demo_indicies[i])
         batch_seq_len[i] = len(flow_seq)
 
-        # # plot
-        # plt.figure(1)
-        # plt.plot(action_seq[:, 1], 'r', 
-        #          smoothed_flow_seq, 'g', 
-        #          lagged_cmd_seq, 'b',
-        #          cmd_seq, 'k',
+        # plot
+        plt.figure(1)
+        plt.plot(action_seq[:, 1], 'r', 
+                 smoothed_flow_seq, 'g', 
+                 lagged_cmd_seq, 'b',
+                 cmd_seq, 'k',
+                 start_indicies, np.ones_like(start_indicies)*2, 'mo',
+                 end_indicies, np.ones_like(end_indicies)*2, 'yo',
+                 np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'go')
+        # plt.plot(batch_prev_cmd_seq[i, :, 0], 'r', 
+        #          batch_cmd_seq[i, :, 0], 'g', 
         #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
-        #          end_indicies, np.ones_like(end_indicies)*2, 'yo',
-        #          np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'go')
-        # # plt.plot(batch_prev_cmd_seq[i, :, 0], 'r', 
-        # #          batch_cmd_seq[i, :, 0], 'g', 
-        # #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
-        # #          end_indicies, np.ones_like(end_indicies)*2, 'yo')
-        # plt.show()
+        #          end_indicies, np.ones_like(end_indicies)*2, 'yo')
+        plt.show()
 
     # print('sampled a batch in {:.1f}s '.format(time.time() - start_time))
     return [batch_demo_img_seq, 
@@ -362,6 +388,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
             batch_demo_len, 
             batch_seq_len, 
             batch_demo_indicies]
+
 
 def get_a_batch_for_metric_learning(data, start, batch_size, img_size, max_len):
     start_time = time.time()
@@ -624,7 +651,7 @@ if __name__ == '__main__':
     # meta_file_path = sys.argv[3]
     # print('meta_file_path: ', meta_file_path)
 
-    sub_data_path = '/mnt/Work/catkin_ws/data/vpf_data/mini'
+    sub_data_path = '/mnt/Work/catkin_ws/data/vpf_data/real'
     meta_file_path = '/mnt/mnt/Work/catkin_ws/data/vpf_data/meta'
 
 
@@ -641,7 +668,11 @@ if __name__ == '__main__':
 
     # write_multiple_meta_files(data_path_list, meta_file_path, max_file_num, max_step, img_size)
 
-    data = read_data_to_mem(sub_data_path, max_step, img_size, batch_size)
-    batch_data = get_a_batch_for_metric_learning(data, 0, batch_size, img_size, 20)
+    data = read_data_to_mem(sub_data_path, 10000, img_size, batch_size)
+    data = segment_long_seq_data(data, 100, 200)
+    print('data len: ', len(data))
+    for t in xrange(20):
+        batch_data = get_a_batch(data, t*batch_size, batch_size, max_step, img_size, max_demo_len=10, lag=20, real_flag=True)
+    # batch_data = get_a_batch_for_metric_learning(data, 0, batch_size, img_size, 20)
     # image_mean_and_variance(sub_data_path, max_step, img_size)
             
