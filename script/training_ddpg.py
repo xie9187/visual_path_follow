@@ -118,6 +118,7 @@ def main(sess, robot_name='robot1'):
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:
             print 'randomising the environment'
+            env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
             world.RandomTableAndMap()
             world.GetAugMap()
             obj_list = env.GetModelStates()
@@ -128,7 +129,7 @@ def main(sess, robot_name='robot1'):
             print 'randomisation finished'
 
         try:
-            table_route, map_route, real_route, init_pose = world.RandomPath()
+            table_route, map_route, real_route, init_pose = world.RandomPath(long_path=False)
             timeout_flag = False
         except:
             timeout_flag = True
@@ -160,6 +161,7 @@ def main(sess, robot_name='robot1'):
         action = [0., 0.]
         t = 0
         terminate = False
+        noise_annealing = 1.
         while not rospy.is_shutdown():
             start_time = time.time()
 
@@ -204,8 +206,8 @@ def main(sess, robot_name='robot1'):
             env.CommandPublish(cmd)
 
             prev_a = copy.deepcopy(action)
-            action = agent.ActorPredict([depth_stack], [[combined_cmd]], [prev_a])
-            action += (exploration_noise.noise() * np.asarray(agent.action_range))
+            action = agent.ActorPredict([depth_stack], [[cmd]], [prev_a])
+            action += (exploration_noise.noise() * np.asarray(agent.action_range) * noise_annealing)
 
             env.SelfControl(action, [0.3, np.pi/6])
             
@@ -236,6 +238,7 @@ def main(sess, robot_name='robot1'):
 
             t += 1
             T += 1
+            noise_annealing -= 1/flags.max_training_step
             rate.sleep()
             loop_time.append(time.time() - start_time)
 
