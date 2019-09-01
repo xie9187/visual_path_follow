@@ -45,7 +45,7 @@ flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ 
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
 
 # training param
-flag.DEFINE_integer('max_training_step', 2000000, 'max step.')
+flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
 flag.DEFINE_string('model_dir', '/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
 flag.DEFINE_string('model_name', "ddpg", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 10000, 'How many training steps to do per checkpoint.')
@@ -114,6 +114,8 @@ def main(sess, robot_name='robot1'):
 
     # start learning
     training_start_time = time.time()
+    success_nums = np.zeros([10], dtype=np.float32)
+    demo_lens = np.zeros([10], dtype=np.float32)
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:
@@ -233,6 +235,13 @@ def main(sess, robot_name='robot1'):
                 print info_train
 
                 episode += 1
+                if flags.test and episode == 1000:
+                    print 'success num distributs: ', success_nums
+                    print 'demo length distributs: ', demo_lens
+                    demo_lens[demo_lens==0] = 1e-12
+                    print 'success rate distributs: ', success_nums/demo_lens
+                    break
+
                 T += 1
                 break
 
