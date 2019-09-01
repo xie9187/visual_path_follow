@@ -209,7 +209,8 @@ def main(sess, robot_name='robot1'):
 
             prev_a = copy.deepcopy(action)
             action = agent.ActorPredict([depth_stack], [[cmd]], [prev_a])
-            action += (exploration_noise.noise() * np.asarray(agent.action_range) * noise_annealing)
+            if not flags.test:
+                action += (exploration_noise.noise() * np.asarray(agent.action_range) * noise_annealing)
 
             env.SelfControl(action, [0.3, np.pi/6])
             
