@@ -254,8 +254,7 @@ def main(sess, robot_name='robot1'):
                     print 'demo length distributs: ', demo_lens
                     demo_lens[demo_lens==0] = 1e-12
                     print 'success rate distributs: ', success_nums/demo_lens
-                    break
-                T += 1
+                    return True
                 break
 
             t += 1
