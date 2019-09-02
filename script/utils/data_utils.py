@@ -260,14 +260,39 @@ def segment_long_seq_data(data, min_seq_len, max_seq_len):
     for long_data_seq in data:
         pos = 0
         data_seq_len = len(long_data_seq[0])
+        long_flow_seq = long_data_seq[1]
+        long_flow_seq = np.reshape(long_flow_seq, [-1])
+        smoothed_flow_seq = moving_average(long_flow_seq, 11) / 2 
         seq_len = np.random.randint(min_seq_len, max_seq_len)
-        while pos + seq_len <= data_seq_len:
-            img_seq = long_data_seq[0][pos:pos+seq_len]
-            flow_seq = long_data_seq[1][pos:pos+seq_len]
-            action_seq = long_data_seq[2][pos:pos+seq_len]
-            segmented_data.append([img_seq, flow_seq, action_seq])
-            seq_len = np.random.randint(min_seq_len, max_seq_len)
-            pos += seq_len/4
+        start = 0
+        smooth_cnt = 0
+        # find smoothed stop points
+        stop_points = []
+        for pos in xrange(data_seq_len):
+            smooth_cnt = smooth_cnt + 1 if np.fabs(smoothed_flow_seq[pos]) < 0.3 else 0
+            if smooth_cnt > 20:
+                stop_points.append(pos-smooth_cnt/2)
+                smooth_cnt = 0
+
+        # segment sequence
+        for stop_point in stop_points:
+            start = stop_point
+            min_end = start + min_seq_len
+            max_end = start + max_seq_len
+            possible_ends = [pos for pos in stop_points if (pos > min_end and pos < max_end)]
+            if len(possible_ends) > 0:
+                end = random.sample(possible_ends, 1)[0]
+                img_seq = long_data_seq[0][start:end]
+                flow_seq = long_data_seq[1][start:end]
+                action_seq = long_data_seq[2][start:end]
+                segmented_data.append([img_seq, flow_seq, action_seq])
+
+        # # plot
+        # plt.figure(1)
+        # plt.plot(smoothed_flow_seq, 'g', 
+        #          stop_points, np.zeros_like(stop_points), 'mo')
+        # plt.show()
+
     return segmented_data
 
 
@@ -314,28 +339,21 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
 
         flow_seq = np.reshape(flow_seq, [-1])
         window_size = 11 if real_flag else 9
-        smoothed_flow_seq = moving_average(flow_seq, window_size) 
-        threshold = 2.5 if real_flag else 1
+        scale = 2 if real_flag else 1
+        smoothed_flow_seq = moving_average(flow_seq, window_size) / scale 
+        threshold = 1
         raw_cmd_seq = copy.deepcopy(smoothed_flow_seq)
         raw_cmd_seq[raw_cmd_seq<=-threshold] = -threshold
         raw_cmd_seq[raw_cmd_seq>=threshold] = threshold
         raw_cmd_seq[np.fabs(raw_cmd_seq)<threshold] = 0
         raw_cmd_seq.astype(np.int32)
-        # random left and right cmd
-        if np.random.rand() < 0.5:
-            raw_cmd_seq = -raw_cmd_seq
         
-        # cmd_seq
+        # lagged_cmd_seq
         lagged_cmd_seq = raw_cmd_seq + 2
-        lag_noise = random.randint(-3, 3) if real_flag else 0
-        cmd_seq = np.r_[lagged_cmd_seq[lag-lag_noise:], np.ones_like(lagged_cmd_seq[:lag-lag_noise])*2]
-        cmd_seq[-10:] = 0
-        batch_prev_cmd_seq[i, 0, :] = np.expand_dims(cmd_seq[0], axis=0) # 1
-        batch_prev_cmd_seq[i, 1:len(cmd_seq), :] = np.expand_dims(cmd_seq[:-1], axis=1) # l, 1
-        batch_cmd_seq[i, :len(cmd_seq), :] = np.expand_dims(cmd_seq, axis=1) # l, 1
+        lagged_cmd_seq[-10:] = 0
 
         # demo
-        binary_cmd_seq = copy.deepcopy(cmd_seq)
+        binary_cmd_seq = copy.deepcopy(lagged_cmd_seq)
         binary_cmd_seq[-1] = binary_cmd_seq[-2]
         binary_cmd_seq[binary_cmd_seq!=2] = 3
         flow_d = binary_cmd_seq[1:] - binary_cmd_seq[:-1] # l - 1
@@ -353,30 +371,67 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         assert len(start_indicies) == len(end_indicies), 'length of turning start and end indicies not equal'
 
         n = 0
-        for start_idx, end_idx in zip(start_indicies, end_indicies):
-            demo_idx = max((start_idx*2/10+end_idx*8/10), 0)
-            batch_demo_indicies[i].append(demo_idx)
-            batch_demo_img_seq[i, n, :, :, :] = img_seq[demo_idx, :, :, :]
-            batch_demo_cmd_seq[i, n, :] = np.expand_dims(cmd_seq, axis=1)[demo_idx, :]
-            n += 1
+        last_end_idx = 0
+        cmd_seq = np.ones_like(lagged_cmd_seq)*2
+        real_start_indicies = []
+        real_end_indicies = []
+        for j, (start_idx, end_idx) in enumerate(zip(start_indicies, end_indicies)):
+            if j < len(start_indicies)-1:
+                # if lag > start_idx - last_end_idx:
+                #     shift = min(lag, (start_idx - last_end_idx)/2) if start_idx >= last_end_idx else 0
+                # else:
+                #     shift = lag, start_idx - last_end_idx if start_idx >= last_end_idx else 0
+
+                cmd_len = 10
+                if (start_idx - last_end_idx)/2 > cmd_len:
+                    shift = min((start_idx - last_end_idx)/2, lag) if start_idx >= last_end_idx else 0
+                else:
+                    shift = min(cmd_len, start_idx - last_end_idx) if start_idx >= last_end_idx else 0
+                cmd = 1 if np.random.rand() < 0.5 else 3
+                real_start_idx = start_idx - shift
+                real_end_idx = min(real_start_idx+cmd_len, start_idx)
+            else:
+                shift = 0
+                cmd = 0
+                real_start_idx = start_idx
+                real_end_idx = end_idx
+            real_start_indicies.append(real_start_idx)
+            real_end_indicies.append(real_end_idx)
+            demo_idx = max((real_start_idx*2/10+real_end_idx*8/10), 0)
+            cmd_seq[real_start_idx:real_end_idx] = cmd
+            if np.mean(np.fabs(smoothed_flow_seq[real_start_idx:real_end_idx])) < 0.5 and end_idx - start_idx > 3:
+                batch_demo_indicies[i].append(demo_idx)
+                batch_demo_img_seq[i, n, :, :, :] = img_seq[demo_idx, :, :, :]
+                batch_demo_cmd_seq[i, n, 0] = cmd
+                n += 1
+            last_end_idx = end_idx
+
+
+                
+
+        batch_prev_cmd_seq[i, 0, :] = np.expand_dims(cmd_seq[0], axis=0) # 1
+        batch_prev_cmd_seq[i, 1:len(cmd_seq), :] = np.expand_dims(cmd_seq[:-1], axis=1) # l, 1
+        batch_cmd_seq[i, :len(cmd_seq), :] = np.expand_dims(cmd_seq, axis=1) # l, 1
 
         batch_demo_len[i] = len(batch_demo_indicies[i])
         batch_seq_len[i] = len(flow_seq)
 
         # plot
-        plt.figure(1)
-        plt.plot(action_seq[:, 1], 'r', 
-                 smoothed_flow_seq, 'g', 
-                 lagged_cmd_seq, 'b',
-                 cmd_seq, 'k',
-                 start_indicies, np.ones_like(start_indicies)*2, 'mo',
-                 end_indicies, np.ones_like(end_indicies)*2, 'yo',
-                 np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'go')
-        # plt.plot(batch_prev_cmd_seq[i, :, 0], 'r', 
-        #          batch_cmd_seq[i, :, 0], 'g', 
-        #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
-        #          end_indicies, np.ones_like(end_indicies)*2, 'yo')
-        plt.show()
+        if idx > 0:
+            print(idx)
+            plt.figure(1)
+            plt.plot(action_seq[:, 1], 'r', 
+                     smoothed_flow_seq, 'g', 
+                     lagged_cmd_seq, 'b',
+                     cmd_seq, 'k',
+                     real_start_indicies, np.ones_like(real_start_indicies)*2, 'mo',
+                     real_end_indicies, np.ones_like(real_end_indicies)*2, 'yo',
+                     np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'go')
+            # plt.plot(batch_prev_cmd_seq[i, :, 0], 'r', 
+            #          batch_cmd_seq[i, :, 0], 'g', 
+            #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
+            #          end_indicies, np.ones_like(end_indicies)*2, 'yo')
+            plt.show()
 
     # print('sampled a batch in {:.1f}s '.format(time.time() - start_time))
     return [batch_demo_img_seq, 
