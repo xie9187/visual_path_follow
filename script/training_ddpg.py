@@ -116,6 +116,7 @@ def main(sess, robot_name='robot1'):
     training_start_time = time.time()
     success_nums = np.zeros([10], dtype=np.float32)
     demo_lens = np.zeros([10], dtype=np.float32)
+    results_nums = np.zeros([3], dtype=np.float32)
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:
@@ -236,6 +237,15 @@ def main(sess, robot_name='robot1'):
                 print info_train
 
                 episode += 1
+                demo_cnt = min(demo_cnt, 10)
+                demo_lens[demo_cnt-1] += 1
+                if result == 2:
+                    success_nums[demo_cnt-1] += 1
+                    results_nums[0] += 1
+                elif result in [3, 4]:
+                    results_nums[2] += 1
+                elif result == 1:
+                    results_nums[1] += 1
                 if flags.test and episode == 1000:
                     print 'success num distributs: ', success_nums
                     print 'demo length distributs: ', demo_lens

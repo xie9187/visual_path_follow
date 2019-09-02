@@ -249,6 +249,15 @@ def main(sess, robot_name='robot1'):
                              '| OpStepT(s): {:.3f}'.format(training_step_time)
                 print info_train
                 episode += 1
+                demo_cnt = min(demo_cnt, 10)
+                demo_lens[demo_cnt-1] += 1
+                if result == 2:
+                    success_nums[demo_cnt-1] += 1
+                    results_nums[0] += 1
+                elif result in [3, 4]:
+                    results_nums[2] += 1
+                elif result == 1:
+                    results_nums[1] += 1
                 if flags.test and episode == 1000:
                     print 'success num distributs: ', success_nums
                     print 'demo length distributs: ', demo_lens
