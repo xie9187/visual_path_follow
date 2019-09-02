@@ -138,7 +138,7 @@ def main(sess, robot_name='robot1'):
             print 'randomisation finished'
 
         try:
-            table_route, map_route, real_route, init_pose = world.RandomPath(long_path=False)
+            table_route, map_route, real_route, init_pose = world.RandomPath(False)
             timeout_flag = False
         except:
             timeout_flag = True
@@ -272,8 +272,9 @@ def main(sess, robot_name='robot1'):
             T += 1
             noise_annealing -= 1/flags.max_training_step
             gru_h_in = gru_h_out
-            rate.sleep()
             loop_time.append(time.time() - start_time)
+            rate.sleep()
+            
 
 
 def model_test(sess):

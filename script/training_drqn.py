@@ -233,10 +233,8 @@ def training(sess, robot_name='robot1'):
 
             prev_a = copy.deepcopy(action)
             q, gru_h_out = agent.ActionPredict([depth_stack], [[cmd]], [prev_a], gru_h_in)
-            if T < flags.observe_steps and not flags.test:
+            if (T < flags.observe_steps or random.random() <= epsilon) and not flags.test:
                 action_index = np.random.randint(flags.dim_action)
-            elif random.random() <= epsilon and not flags.test:
-                action_index = random.randrange(flags.dim_action)
             else:
                 action_index = np.argmax(q)
             action = np.zeros([flags.dim_action], dtype=np.int32)
@@ -274,6 +272,10 @@ def training(sess, robot_name='robot1'):
                              '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
                              '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
                              '| OpStepT(s): {:.3f}'.format(training_step_time)
+                if not label_action_flag:
+                    print info_train
+                else:
+                    print '| demo episode |'
                 episode += 1
                 demo_cnt = min(len(cmd_list), 10)
                 demo_lens[demo_cnt-1] += 1
@@ -292,10 +294,6 @@ def training(sess, robot_name='robot1'):
                     print 'results nums: ', results_nums
                     return True
                 break
-                if not label_action_flag:
-                    print info_train
-                else:
-                    print '| demo episode |'
                 T += 1
                 break
 

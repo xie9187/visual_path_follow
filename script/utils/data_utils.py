@@ -192,6 +192,9 @@ def read_img_file(file_name, resize=None):
     rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
     return rgb_img, origin_img_dim
 
+def img_resize(img, resize):
+    return cv2.resize(img, (resize[0], resize[1]), interpolation=cv2.INTER_AREA)
+
 def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
     start_time = time.time()
     mem = 0.
