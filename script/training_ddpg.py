@@ -96,7 +96,7 @@ def main(sess, robot_name='robot1'):
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
     # model saver
-    saver = tf.train.Saver(trainable_var, max_to_keep=3)
+    saver = tf.train.Saver(trainable_var, max_to_keep=3, save_relative_paths=True)
 
     sess.run(tf.global_variables_initializer())
 
@@ -260,8 +260,8 @@ def main(sess, robot_name='robot1'):
             t += 1
             T += 1
             noise_annealing -= 1/flags.max_training_step
-            rate.sleep()
             loop_time.append(time.time() - start_time)
+            rate.sleep()
 
 
 def model_test(sess):
