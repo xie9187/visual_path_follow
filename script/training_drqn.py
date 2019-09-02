@@ -172,7 +172,7 @@ def training(sess, robot_name='robot1'):
         dynamic_route = copy.deepcopy(real_route)
         time.sleep(0.1)
 
-        cmd_seq, goal_seq = world.GetCmdAndGoalSeq(table_route)
+        cmd_seq, goal_seq, cmd_list = world.GetCmdAndGoalSeq(table_route)
         pose = env.GetSelfStateGT()
         cmd, last_cmd, next_goal = world.GetCmdAndGoal(table_route, cmd_seq, goal_seq, pose, 2, 2, [0., 0.])
         try:
@@ -290,7 +290,7 @@ def training(sess, robot_name='robot1'):
                              '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
                              '| OpStepT(s): {:.3f}'.format(training_step_time)
                 episode += 1
-                demo_cnt = min(len(world.cmd_list), 10)
+                demo_cnt = min(len(cmd_list), 10)
                 demo_lens[demo_cnt-1] += 1
                 if result == 2:
                     success_nums[demo_cnt-1] += 1
