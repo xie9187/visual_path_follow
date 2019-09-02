@@ -494,7 +494,7 @@ class GridWorld(object):
             # plt.imshow(self.table, origin='lower')
             # plt.show()        
 
-        return cmd_seq, goal_seq
+        return cmd_seq, goal_seq, self.cmd_list
 
     def GetCmdAndGoal(self, table_path, cmd_seq, goal_seq, pose, prev_cmd=None, prev_last_cmd=None, prev_goal=None):
         curr_table_pos = self.Map2Table(self.Real2Map(pose))
