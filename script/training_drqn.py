@@ -11,8 +11,8 @@ import utils.data_utils as data_utils
 import matplotlib.pyplot as plt
 import  as commander_model
 
-from data_generation.GazeboRoomDataGenerator import GridWorld, FileProcess
-from data_generation.GazeboWorld import GazeboWorld
+from utils.GazeboRoomDataGenerator import GridWorld, FileProcess
+from utils.GazeboWorld import GazeboWorld
 from utils.model_utils import variable_summaries
 from model.drqn import DRQN
 from model.visual_commander import visual_commander
