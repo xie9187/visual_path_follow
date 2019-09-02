@@ -142,6 +142,9 @@ def training(sess, robot_name='robot1'):
                     [flags.a_linear_range/2, -flags.a_angular_range],
                     [0., flags.a_angular_range],
                     [0., -flags.a_angular_range]]
+    success_nums = np.zeros([10], dtype=np.float32)
+    demo_lens = np.zeros([10], dtype=np.float32)
+    results_nums = np.zeros([3], dtype=np.float32)
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:
@@ -286,11 +289,28 @@ def training(sess, robot_name='robot1'):
                              '| Time(min): {:2.1f}'.format((time.time() - training_start_time)/60.) + \
                              '| LoopTime(s): {:.3f}'.format(np.mean(loop_time)) + \
                              '| OpStepT(s): {:.3f}'.format(training_step_time)
+                episode += 1
+                demo_cnt = min(len(world.cmd_list), 10)
+                demo_lens[demo_cnt-1] += 1
+                if result == 2:
+                    success_nums[demo_cnt-1] += 1
+                    results_nums[0] += 1
+                elif result in [3, 4]:
+                    results_nums[2] += 1
+                elif result == 1:
+                    results_nums[1] += 1
+                if flags.test and episode == 1000:
+                    print 'success num distributs: ', success_nums
+                    print 'demo length distributs: ', demo_lens
+                    demo_lens[demo_lens==0] = 1e-12
+                    print 'success rate distributs: ', success_nums/demo_lens
+                    print 'results nums: ', results_nums
+                    return True
+                break
                 if not label_action_flag:
                     print info_train
                 else:
                     print '| demo episode |'
-                episode += 1
                 T += 1
                 break
 

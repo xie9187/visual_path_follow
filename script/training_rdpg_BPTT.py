@@ -122,6 +122,7 @@ def main(sess, robot_name='robot1'):
     noise_annealing = 1.
     success_nums = np.zeros([10], dtype=np.float32)
     demo_lens = np.zeros([10], dtype=np.float32)
+    results_nums = np.zeros([3], dtype=np.float32)
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if episode % 40 == 0 or timeout_flag:
@@ -249,7 +250,7 @@ def main(sess, robot_name='robot1'):
                              '| OpStepT(s): {:.3f}'.format(training_step_time)
                 print info_train
                 episode += 1
-                demo_cnt = min(demo_cnt, 10)
+                demo_cnt = min(len(world.cmd_list), 10)
                 demo_lens[demo_cnt-1] += 1
                 if result == 2:
                     success_nums[demo_cnt-1] += 1
@@ -263,6 +264,7 @@ def main(sess, robot_name='robot1'):
                     print 'demo length distributs: ', demo_lens
                     demo_lens[demo_lens==0] = 1e-12
                     print 'success rate distributs: ', success_nums/demo_lens
+                    print 'results nums: ', results_nums
                     return True
                 break
 

@@ -175,7 +175,7 @@ def main(sess, robot_name='robot1'):
 
             if t > 0 and not (flags.supervision and (episode+1)%10 == 0):
                 agent.Add2Mem([depth_stack, 
-                               [combined_cmd], 
+                               [cmd], 
                                prev_a, 
                                action, 
                                reward, 
@@ -237,7 +237,7 @@ def main(sess, robot_name='robot1'):
                 print info_train
 
                 episode += 1
-                demo_cnt = min(demo_cnt, 10)
+                demo_cnt = min(len(world.cmd_list), 10)
                 demo_lens[demo_cnt-1] += 1
                 if result == 2:
                     success_nums[demo_cnt-1] += 1
@@ -251,6 +251,7 @@ def main(sess, robot_name='robot1'):
                     print 'demo length distributs: ', demo_lens
                     demo_lens[demo_lens==0] = 1e-12
                     print 'success rate distributs: ', success_nums/demo_lens
+                    print 'results nums: ', results_nums
                     return True
 
                 T += 1
