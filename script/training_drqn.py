@@ -9,13 +9,11 @@ import random
 import rospy
 import utils.data_utils as data_utils
 import matplotlib.pyplot as plt
-import  as commander_model
 
 from utils.GazeboRoomDataGenerator import GridWorld, FileProcess
 from utils.GazeboWorld import GazeboWorld
 from utils.model_utils import variable_summaries
 from model.drqn import DRQN
-from model.visual_commander import visual_commander
 
 CWD = os.getcwd()
 RANDOM_SEED = 1234
@@ -45,19 +43,6 @@ flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
 flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
 flag.DEFINE_boolean('dueling', False, 'dueling network')
 flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
-
-# commander param
-flag.DEFINE_integer('max_step', 300, 'max step.')
-flag.DEFINE_integer('max_n_demo', 10, 'max number of instructions')
-flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
-flag.DEFINE_string('demo_mode', 'hard', 'the mode of process guidance (hard, sum)')
-flag.DEFINE_string('post_att_model', 'gru', 'the model to use after attention (gru, dense, none)')
-flag.DEFINE_integer('inputs_num', 3, 'how many kinds of inputs used (2, 4)')
-flag.DEFINE_float('keep_prob', 1.0, 'keep probability of drop out')
-flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
-flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
-flag.DEFINE_float('threshold', 0.6, 'prob threshold in commander')
-flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
 
 # training param
 flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
@@ -320,8 +305,9 @@ def training(sess, robot_name='robot1'):
             t += 1
             T += 1
             gru_h_in = gru_h_out
-            rate.sleep()
             loop_time.append(time.time() - start_time)
+            rate.sleep()
+            
 
 
 def model_test(sess):
