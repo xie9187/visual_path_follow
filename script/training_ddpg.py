@@ -170,7 +170,8 @@ def main(sess, robot_name='robot1'):
 
             terminate, result, reward = env.GetRewardAndTerminate(t, 
                                                                   max_step=flags.max_epi_step, 
-                                                                  len_route=len(dynamic_route))
+                                                                  len_route=len(dynamic_route),
+                                                                  test= True if flags.test else False)
             total_reward += reward
 
             if t > 0 and not (flags.supervision and (episode+1)%10 == 0):
