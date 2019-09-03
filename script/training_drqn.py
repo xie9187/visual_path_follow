@@ -219,7 +219,10 @@ def training(sess, robot_name='robot1'):
                                                            prev_last_cmd, 
                                                            prev_goal)
             # add noise
-            if cmd != 2 and np.random.rand() < 0.1:
+            if flags.test:
+                if cmd == 0:
+                    cmd = 2
+            elif cmd != 2 and np.random.rand() < 0.1
                 cmd = np.random.randint(4)
                 
             combined_cmd = last_cmd * flags.n_cmd_type + cmd
