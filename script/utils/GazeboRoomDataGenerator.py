@@ -279,7 +279,7 @@ class GridWorld(object):
                    y_max = np.amin([y+augment_area+1, self.map_size])
                    self.aug_map[y_min:y_max, x_min:x_max]= 1
 
-    def RandomPath(self, long_path=True, fix_path=False):
+    def RandomPath(self, long_path=True, fix_path=False, max_len=80):
         map_path = []
         real_path = []
         dist = 0.
@@ -315,10 +315,10 @@ class GridWorld(object):
                 if turn_num < 2:
                     continue
 
-                if len(map_path) < 80:
+                if len(map_path) < max_len:
                     break
             else:
-                if len(map_path) > 25 and len(map_path) < 80:
+                if len(map_path) > 25 and len(map_path) < max_len:
                     break 
 
         init_yaw = np.arctan2(real_path[1][1] - real_path[0][1], real_path[1][0] - real_path[0][0])

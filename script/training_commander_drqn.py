@@ -128,7 +128,7 @@ def training(sess, robot_name='robot1'):
             # obj_list = env.GetModelStates()
             try:
                 # table_route, map_route, real_route, init_pose = world.RandomPath()
-                table_route, map_route, real_route, init_pose = world.RandomPath(False)
+                table_route, map_route, real_route, init_pose = world.RandomPath(False, max_len=60)
                 timeout_flag = False
             except:
                 timeout_flag = True
