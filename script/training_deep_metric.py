@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 CWD = os.getcwd()
 RANDOM_SEED = 1234
@@ -220,9 +221,18 @@ def offline_test(sess, model):
         l2_norm = np.linalg.norm(img_v - demo_v, axis=1)
         l2_norms.append(l2_norm)
     l2_norms = np.stack(l2_norms, axis=0)
-    plt.imshow(l2_norms)
-    plt.colorbar()
-    plt.show()
+    plt.figure(figsize=(1, 1))
+    ax = plt.gca()
+    im = plt.imshow(l2_norms)
+    plt.xlabel('time steps')
+    plt.ylabel('time steps')
+    ax.axes.get_xaxis().set_ticks([])
+    ax.axes.get_yaxis().set_ticks([])
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im, cax=cax, ticks=[0, int(np.amax(l2_norms))])
+    plt.savefig('dist_metric_'+flags.model_name+'.png', bbox_inches='tight')
+    # plt.show()
 
     # idx_0 = [0,46]
     # idx_1 = [46,105]

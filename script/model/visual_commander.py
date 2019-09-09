@@ -83,6 +83,7 @@ class visual_commander(object):
             self.test_img = tf.placeholder(tf.float32, shape=[None, dim_img[0], dim_img[1], dim_img[2]], name='test_img') #b,h,d,c
             self.test_prev_cmd = tf.placeholder(tf.int32, shape=[None, dim_cmd], name='test_prev_cmd') #b,l,1
             self.test_prev_action = tf.placeholder(tf.float32, shape=[None, dim_a], name='test_prev_action') #b,2
+            self.prob_cnt = 0
 
             if not self.test:
                 inputs = [self.input_demo_img, 
@@ -110,7 +111,7 @@ class visual_commander(object):
                           self.rnn_h_in, 
                           self.demo_len]
                 if metric_only:
-                    self.norm = self.metric_test_model(inputs)
+                    self.img_vect, self.demo_img_vect = self.metric_test_model(inputs)
                 else:
                     self.predict, self.rnn_h_out, self.att_pos, self.max_prob, self.min_norm = self.testing_model(inputs)
 
@@ -282,7 +283,7 @@ class visual_commander(object):
         input_img = tf.reshape(input_img, [-1]+self.dim_img) # 1, dim_img
         img_vect = self.encode_image(input_img) # 1, dim_img_feat
         # img_vect = tf.nn.l2_normalize(img_vect, axis=1)
-        img_vect = tf.tile(tf.expand_dims(img_vect, axis=1), [1, self.max_n_demo, 1]) # 1*l, n, dim_img_feat
+        img_vect_tile = tf.tile(tf.expand_dims(img_vect, axis=1), [1, self.max_n_demo, 1]) # 1*l, n, dim_img_feat
 
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # 1 * n, h, w, c
         demo_vect = self.encode_image(input_demo_img) # 1 * n, dim_img_feat
@@ -290,10 +291,10 @@ class visual_commander(object):
         shape = demo_vect.get_shape().as_list()
         demo_vect = tf.reshape(demo_vect, [-1, self.max_n_demo, shape[-1]]) # 1, n, dim_img_feat
         
-        l2_norm = safe_norm(demo_vect - img_vect, axis=2) # 1*l, n
+        l2_norm = safe_norm(demo_vect - img_vect_tile, axis=2) # 1*l, n
         norm_mask = tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.float32) # 1, n
         l2_norm * norm_mask 
-        return l2_norm
+        return img_vect, demo_vect
 
 
     def encode_image(self, inputs, activation=tf.nn.leaky_relu):
@@ -311,7 +312,6 @@ class visual_commander(object):
         print 'attention mode: sum'
         # process demo
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
-        demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
         input_demo_cmd = tf.reshape(input_demo_cmd, [-1, self.dim_cmd]) # b * n, dim_cmd
         demo_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_demo_cmd), [-1, self.dim_emb]) # b * n, dim_emb
         demo_vect = tf.concat([demo_img_vect, demo_cmd_vect], axis=1) # b * n, dim_img_feat+dim_emb
@@ -333,6 +333,7 @@ class visual_commander(object):
         
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
         demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
+        self.demo_img_vect = demo_img_vect
         shape = demo_img_vect.get_shape().as_list()
         demo_img_vect = tf.reshape(demo_img_vect, [-1, self.max_n_demo, shape[-1]]) # b, n, dim_img_feat
         if not test_flag:
@@ -498,26 +499,38 @@ class visual_commander(object):
         if self.metric_only:
             if t == 0:
                 self.prev_att_pos_real = [0]
-            norm = self.sess.run(self.norm, feed_dict={
-                                 self.input_demo_img: data_utils.img_normalisation(copy.deepcopy(input_demo_img)),
-                                 self.test_img: data_utils.img_normalisation(copy.deepcopy(input_img)),
+            out = self.sess.run([self.img_vect, self.demo_img_vect], feed_dict={
+                                 self.input_demo_img: input_demo_img,
+                                 self.test_img: input_img,
                                  self.demo_len: demo_len,
                                  self.prev_att_pos: self.prev_att_pos_real
                                  })
-            norm = norm[0]
-            curr_norm = norm[self.prev_att_pos_real[0]]
-            next_norm = norm[min(self.prev_att_pos_real[0]+1, demo_len[0]-1)]
-            norm = np.array([curr_norm, next_norm])
-            e_x = np.exp(-norm)
-            prob = e_x / e_x.sum()
-            if prob[1] > 0.95:
+            img_vect, demo_img_vect = out
+            img_vect = img_vect[0]
+            demo_img_vect = demo_img_vect[0]
+            curr_demo_vect = demo_img_vect[self.prev_att_pos_real[0]]
+            next_demo_vect = demo_img_vect[min(self.prev_att_pos_real[0]+1, demo_len[0]-1)]
+
+            def vect_project(a, b):
+                return np.sum(a*b)/np.linalg.norm(b)
+
+            curr_dist = vect_project(img_vect-curr_demo_vect, next_demo_vect-curr_demo_vect)
+            next_dist = vect_project(img_vect-next_demo_vect, curr_demo_vect-next_demo_vect)
+            norm = np.fabs(np.array([curr_dist, next_dist])/np.linalg.norm(curr_demo_vect-next_demo_vect))
+            e_x = np.exp(-norm*2)
+            prob = e_x / np.nansum(e_x)
+            # (0.6, 0.7)
+            if prob[1] > 0.55:
+                self.prob_cnt += 1
+            if self.prob_cnt > 3:
+                self.prob_cnt = 0
                 self.prev_att_pos_real[0] = min(self.prev_att_pos_real[0]+1, demo_len[0]-1)
 
-            curr_norm = norm[min(self.prev_att_pos_real[0]+1, demo_len[0]-1)]
-            predict = [input_demo_cmd[0, self.prev_att_pos_real[0], 0]] if curr_norm < 8. else [2]
+            # curr_norm = norm[min(self.prev_att_pos_real[0]+1, demo_len[0]-1)]
+            predict = [input_demo_cmd[0, self.prev_att_pos_real[0], 0]] if prob[0] > 0.6 else [2]
             att_pos = copy.deepcopy(self.prev_att_pos_real)
-            info_shows = '| next_prob:{:.3f}'.format(prob[1]) + \
-                         '| curr_norm:{:3.3f}'.format(curr_norm) + \
+            info_shows = '| curr_porb:{:.3f}'.format(prob[0]) + \
+                         '| next_prob:{:.3f}'.format(prob[1]) + \
                          '| predict:{:1d}'.format(predict[0]) + \
                          '| att_pos: {:1d}'.format(att_pos[0])
             print info_shows, '| input_demo_cmd:', input_demo_cmd[0].tolist()[:demo_len[0]]
@@ -531,21 +544,20 @@ class visual_commander(object):
             out = self.sess.run([self.predict, 
                                  self.rnn_h_out, 
                                  self.att_pos, 
-                                 self.max_prob,
+                                 self.prob,
                                  self.min_norm,
                                  ], feed_dict={
-                                 self.input_demo_img: data_utils.img_normalisation(copy.deepcopy(input_demo_img)),
+                                 self.input_demo_img: input_demo_img,
                                  self.input_demo_cmd: input_demo_cmd,
-                                 self.test_img: data_utils.img_normalisation(copy.deepcopy(input_img)),
+                                 self.test_img: input_img,
                                  self.test_prev_cmd: input_prev_cmd,
                                  self.test_prev_action: input_prev_action,
                                  self.demo_len: demo_len,
                                  self.rnn_h_in: rnn_h_in,
                                  self.prev_att_pos: self.prev_att_pos_real
                                  })
-            predict, self.rnn_h_out_real, att_pos, max_prob, min_norm = out
+            predict, self.rnn_h_out_real, att_pos, prob, min_norm = out
             self.prev_att_pos_real = att_pos
-            # predict = [input_demo_cmd[0, att_pos[0], 0]] if min_norm < 8. else [2]
             # elif max_prob < 0.4:
             #     predict = [2]
             # info_shows = '| max_prob:{:.3f}'.format(max_prob) + \

@@ -64,7 +64,8 @@ flag.DEFINE_string('dist', 'l2', 'distance (cos, l2)')
 flag.DEFINE_string('data_dir',  '/home/linhai/Work/catkin_ws/data/vpf_data/axe',
                     'Data directory')
 flag.DEFINE_string('model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
-flag.DEFINE_string('model_name', 'vc_demo_sum', 'model name.')
+flag.DEFINE_string('model_name', 'test', 'model name.')
+flag.DEFINE_string('init_model_name', 'vc_hard_gru_reinforce_3loss_mix', 'initial model name.')
 flag.DEFINE_string('cnn_model_dir', '/home/linhai/Work/catkin_ws/data/vpf_data/saved_network/deep_metric', 'pretrained cnn path')
 flag.DEFINE_integer('max_epoch', 50, 'max epochs.')
 flag.DEFINE_boolean('save_model', True, 'save model.')
@@ -72,6 +73,7 @@ flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('online_test', False, 'online test.')
 flag.DEFINE_boolean('offline_test', False, 'offline test test with batches.')
 flag.DEFINE_boolean('single_test', False, 'single test test with a sample sequence.')
+flag.DEFINE_boolean('finetune', False, 'finetuning on real world data')
 
 # noise param
 flag.DEFINE_float('mu', 0., 'mu')
@@ -91,13 +93,23 @@ def training(sess, model):
     img_size = [flags.dim_rgb_h, flags.dim_rgb_w]
     max_n_demo = flags.max_n_demo
 
-    data = data_utils.read_data_to_mem(flags.data_dir, flags.max_step, [flags.dim_rgb_h, flags.dim_rgb_w])
-    train_data = data[:len(data)*seg_point/10]
-    valid_data = data[len(data)*seg_point/10:]
-
+    data = data_utils.read_data_to_mem(flags.data_dir, 
+                                       flags.max_step if not flags.finetune else 10000, 
+                                       [flags.dim_rgb_h, flags.dim_rgb_w])
+    if flags.finetune:
+        data = data_utils.segment_long_seq_data(data, 100, 200)
+    train_data = []
+    valid_data = []
+    for i, sample in enumerate(data):
+        if i % 10 == 9:
+            valid_data.append(sample)
+        else:
+            train_data.append(sample)
+            
     model_dir = os.path.join(flags.model_dir, flags.model_name)
     if not os.path.exists(model_dir): 
         os.makedirs(model_dir)
+    init_model_dir = os.path.join(flags.model_dir, flags.init_model_name)
 
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     sess.run(init_op)
@@ -137,13 +149,15 @@ def training(sess, model):
     merged = tf.summary.merge_all()
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
 
-    if flags.load_model:
-        checkpoint = tf.train.get_checkpoint_state(model_dir)
+    if flags.load_model or flags.finetune:
+        checkpoint = tf.train.get_checkpoint_state(model_dir) if not flags.finetune else \
+                     tf.train.get_checkpoint_state(init_model_dir) 
         if checkpoint and checkpoint.model_checkpoint_path:
             saver.restore(sess, checkpoint.model_checkpoint_path)
             print 'model loaded: ', checkpoint.model_checkpoint_path 
         else:
             print 'model not found'
+
 
     start_time = time.time()
     print 'start training'
@@ -160,13 +174,20 @@ def training(sess, model):
         all_t = 0
         for t in xrange(len(train_data)/batch_size):
             sample_start_time = time.time()
-            batch_data = data_utils.get_a_batch(train_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
+            batch_data = data_utils.get_a_batch(train_data, 
+                                                t*batch_size, 
+                                                batch_size, 
+                                                max_step if flags.finetune else 10000, 
+                                                img_size, 
+                                                max_n_demo, 
+                                                real_flag=flags.finetune)
             if flags.metric_learning:
                 metric_batch_data = data_utils.get_a_batch_for_metric_learning(train_data, 
                                                                                t*batch_size, 
                                                                                batch_size,
                                                                                img_size,
-                                                                               flags.max_len)
+                                                                               flags.max_len,
+                                                                               real_flag=flags.finetune)
                 batch_data += metric_batch_data
             sample_time = time.time() - sample_start_time
 
@@ -190,13 +211,20 @@ def training(sess, model):
         end_flag = False
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
-            batch_data = data_utils.get_a_batch(valid_data, t*batch_size, batch_size, max_step, img_size, max_n_demo)
+            batch_data = data_utils.get_a_batch(valid_data, 
+                                                t*batch_size, 
+                                                batch_size, 
+                                                max_step, 
+                                                img_size, 
+                                                max_n_demo, 
+                                                real_flag=flags.finetune)
             if flags.metric_learning:
                 metric_batch_data = data_utils.get_a_batch_for_metric_learning(valid_data, 
                                                                                t*batch_size, 
                                                                                batch_size,
                                                                                img_size,
-                                                                               flags.max_len)
+                                                                               flags.max_len,
+                                                                               real_flag=flags.finetune)
                 batch_data += metric_batch_data
             acc, loss, _, _, _, _ = model.valid(batch_data)
 
@@ -232,8 +260,11 @@ def offline_testing(sess, model):
     img_size = [flags.dim_rgb_h, flags.dim_rgb_w]
     max_n_demo = flags.max_n_demo
 
-    data = data_utils.read_data_to_mem(flags.data_dir, flags.max_step, [flags.dim_rgb_h, flags.dim_rgb_w])
-
+    data = data_utils.read_data_to_mem(flags.data_dir, 
+                                       flags.max_step if not flags.finetune else 10000, 
+                                       [flags.dim_rgb_h, flags.dim_rgb_w])
+    if flags.finetune:
+        data = data_utils.segment_long_seq_data(data, 100, 200)
     model_dir = os.path.join(flags.model_dir, flags.model_name)
 
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
@@ -258,7 +289,13 @@ def offline_testing(sess, model):
     for batch_id in xrange(len(data)/batch_size):
         print 'batch: ', batch_id
         fig, axes = plt.subplots(batch_size/2, 2, sharex=True, figsize=(8,12))
-        batch_data = data_utils.get_a_batch(data, batch_id*batch_size, batch_size, max_step, img_size, max_n_demo)
+        batch_data = data_utils.get_a_batch(data, 
+                                            batch_id*batch_size, 
+                                            batch_size, 
+                                            max_step, 
+                                            img_size, 
+                                            max_n_demo, 
+                                            real_flag=flags.finetune)
         acc, loss, pred_cmd, att_pos, l2_norm, prob = model.valid(batch_data)
         for i in xrange(batch_size):
             demo_img_seq = batch_data[0][i, :, :, :]
@@ -305,8 +342,11 @@ def single_testing(sess, model):
     img_size = [flags.dim_rgb_h, flags.dim_rgb_w]
     max_n_demo = flags.max_n_demo
 
-    data = data_utils.read_data_to_mem(flags.data_dir, flags.max_step, [flags.dim_rgb_h, flags.dim_rgb_w])
-
+    data = data_utils.read_data_to_mem(flags.data_dir, 
+                                       flags.max_step if not flags.finetune else 10000, 
+                                       [flags.dim_rgb_h, flags.dim_rgb_w])
+    if flags.finetune:
+        data = data_utils.segment_long_seq_data(data, 100, 200)
     model_dir = os.path.join(flags.model_dir, flags.model_name)
 
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())

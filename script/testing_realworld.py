@@ -65,15 +65,16 @@ flag.DEFINE_boolean('metric_only', False, 'only use deep metric network')
 # training param
 flag.DEFINE_integer('max_training_step', 500000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
-flag.DEFINE_string('commander_model_name', 'vc_hard_gru_reinforce_3loss_mix', 'commander model name.')
+flag.DEFINE_string('commander_model_name', 'real_commander', 'commander model name.')
 flag.DEFINE_string('controller_model_name', 'finetuning_3loss_mix', 'controller model name.')
 flag.DEFINE_string('depth_model_path', '/mnt/Work/catkin_ws/data/vpf_data/saved_network/depth/nyu.h5', 'depth estimator model name.')
 flag.DEFINE_string('model_name', "real_world_test", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 100000, 'How many training steps to do per checkpoint.')
 flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer') #5000
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
-flag.DEFINE_boolean('manual_cmd', True, 'whether to use manual commander')
+flag.DEFINE_boolean('manual_cmd', False, 'whether to use manual commander')
 flag.DEFINE_boolean('gt_depth', True, 'whether to use gt depth.')
+flag.DEFINE_string('demo_dir', '/mnt/Work/catkin_ws/data/vpf_data/real_test/1_demo', 'demo directory.')
 
 flags = flag.FLAGS
 
@@ -139,20 +140,25 @@ def real_world_test(sess):
         depth_estimator = load_model(flags.depth_model_path, custom_objects=custom_objects, compile=False)
         print 'depth estimator loaded: ', flags.depth_model_path
 
+    # get demo
+    demo_imgs, demo_cmds, demo_imgs_raw = data_utils.read_demo(flags.demo_dir, [flags.dim_rgb_h, flags.dim_rgb_w])
+    demo_len = len(demo_imgs)
+    demo_img_seq = np.zeros([1, flags.max_n_demo, flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c], dtype=np.float32)
+    demo_cmd_seq = np.zeros([1, flags.max_n_demo, flags.dim_cmd], dtype=np.uint8)
+    for i in xrange(demo_len):
+        demo_img_seq[0, i, :, :, :] = demo_imgs[i]
+        demo_cmd_seq[0, i, :] = demo_cmds[i]
+    print 'demo cmd: ', demo_cmds.tolist()
+
     env = RealWorld(rgb_size=[flags.dim_rgb_w, flags.dim_rgb_h],
                     depth_size=[flags.dim_depth_w, flags.dim_depth_h])
-
-    # get demo
-    demo_img_seq = np.zeros([1, flags.max_n_demo, flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c], dtype=np.uint8)
-    demo_cmd_seq = np.zeros([1, flags.max_n_demo, flags.dim_cmd], dtype=np.uint8)
-    demo_len = 1
 
     wait_flag = False
     rate = rospy.Rate(5.)
     pred_cmd = 2
     action_table = [[flags.a_linear_range, 0.],
-                    [flags.a_linear_range/2, flags.a_angular_range],
-                    [flags.a_linear_range/2, -flags.a_angular_range]]
+                    [flags.a_linear_range/4*3, flags.a_angular_range*1.3],
+                    [flags.a_linear_range/4*3, -flags.a_angular_range*1.3]]
     depth_img = env.GetDepthImageObservation()
     depth_stack = np.stack([depth_img, depth_img, depth_img], axis=-1)
     one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
@@ -166,9 +172,18 @@ def real_world_test(sess):
     ax = fig.add_subplot(111)
     plt.show(block=False)
     matplotlib.use('TkAgg') 
+    rgb_img_list = []
+    pred_cmd_list = []
+    pred_a_list = []
+    att_pos_list = []
+    gt_action_list = []
+    pos_list = []
+    cmd = 2
+    action = action_table[0]
     while not rospy.is_shutdown():
         start_time = time.time()
-        rgb_img, rgb_img_raw = env.GetRGBImageObservation(raw_data=True)
+        bgr_img, bgr_img_raw = env.GetRGBImageObservation(raw_data=True)
+        rgb_img = data_utils.bgr2rgb(bgr_img)
         depth_img, depth_img_raw = env.GetDepthImageObservation(raw_data=True)
         depth_img_raw = data_utils.img_resize(depth_img_raw, (320, 240))
 
@@ -182,8 +197,9 @@ def real_world_test(sess):
             break
         if wait_flag == False:
             continue
+        rgb_img_list.append(bgr_img_raw)
         if not flags.gt_depth:
-            disparity = predict(depth_estimator, np.expand_dims(rgb_img_raw, axis=0))[0]
+            disparity = predict(depth_estimator, np.expand_dims(data_utils.bgr2rgb(bgr_img_raw), axis=0))[0]
             pred_depth  = baseline * 525 / (640*disparity)
             env.PublishPredDepth(np.squeeze(pred_depth))
             pred_depth_img = np.expand_dims(data_utils.img_resize(pred_depth, (flags.dim_depth_w, flags.dim_depth_h)), axis=2)
@@ -205,9 +221,9 @@ def real_world_test(sess):
             depth_stack = np.stack([depth_img, depth_stack[:, :, 0], depth_stack[:, :, 1]], axis=-1)
 
         # get  command
-        print 'key: ', key
         if flags.manual_cmd:
-            if key == 'd':
+            print 'key: ', key
+            if key == 's':
                 cmd = 1
             elif key == 'a':
                 cmd = 3
@@ -215,16 +231,20 @@ def real_world_test(sess):
                 cmd = 2
         else:
             prev_pred_cmd = cmd
-            pred_cmd, att_pos = commander.online_predict(input_demo_img=demo_img_seq, 
-                                                         input_demo_cmd=demo_cmd_seq, 
-                                                         input_img=np.expand_dims(rgb_image, axis=0), 
-                                                         input_prev_cmd=[[cmd]], 
-                                                         input_prev_action=[action], 
-                                                         demo_len=[demo_len], 
-                                                         t=t,
-                                                         threshold=flags.threshold)
-            if cmd == 0:
-                cmd = 2
+            normalised_rgb_img = data_utils.img_normalisation(rgb_img, real_img=True)
+            cmd, att_pos = commander.online_predict(input_demo_img=demo_img_seq, 
+                                                    input_demo_cmd=demo_cmd_seq, 
+                                                    input_img=np.expand_dims(normalised_rgb_img, axis=0), 
+                                                    input_prev_cmd=[[cmd]], 
+                                                    input_prev_action=[action], 
+                                                    demo_len=[demo_len], 
+                                                    t=t,
+                                                    threshold=flags.threshold)
+            env.PublishDemoRGBImage(data_utils.rgb2bgr(demo_imgs_raw[att_pos]), att_pos)
+            # if cmd == 0:
+            #     cmd = 2
+        pred_cmd_list.append(cmd)
+        att_pos_list.append(att_pos)
         env.CommandPublish(cmd)
 
         # get action
@@ -234,14 +254,37 @@ def real_world_test(sess):
         one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
         one_hot_action[action_index] = 1
         action = action_table[action_index]
+        pred_a_list.append(action_index)
 
-        print 't:', t, 'cmd:', cmd, 'a:', action_index
-        env.SelfControl(action, [0.3, np.pi/6])
+        # print 't:', t, 'cmd:', cmd, 'att:', att_pos, 'a:', action_index
+        gt_action = env.GetCmd()
+        gt_action_list.append(gt_action)
+        env.SelfControl(action, [0.3, np.pi/3])
+
+        pos = env.GetPos()
+        pos_list.append(pos)
+
         t += 1
         gru_h_in = gru_h_out
         loop_time.append(time.time() - start_time)
         rate.sleep()
 
+    # record results
+    results_dir = flags.demo_dir+'_results'
+    if not os.path.isdir(results_dir):
+        os.makedirs(results_dir)
+    data_utils.write_csv(pred_cmd_list, os.path.join(results_dir, 'pred_cmd.csv'))
+    data_utils.write_csv(pred_a_list, os.path.join(results_dir, 'pred_a.csv'))
+    data_utils.write_csv(att_pos_list, os.path.join(results_dir, 'att_pos.csv'))
+
+    image_path = os.path.join(results_dir, 'rgb_imgs')
+    if not os.path.isdir(image_path):
+        os.makedirs(image_path)
+    for i, img in enumerate(rgb_img_list):
+        data_utils.save_img(os.path.join(image_path, str(i)+'.png'), img)
+
+    data_utils.write_csv(gt_action_list, os.path.join(results_dir, 'gt_action.csv'))
+    data_utils.write_csv(pos_list, os.path.join(results_dir, 'pos.csv'))
 
 if __name__ == '__main__':
     config = tf.ConfigProto(allow_soft_placement=True)

@@ -6,17 +6,14 @@ import os
 import sys
 import time
 import random
-import utils.data_utils as data_utils
-import utils.model_utils as model_utils
-import model.visual_commander as commander_model
-import progressbar
 import rospy
+import utils.data_utils as data_utils
 import matplotlib.pyplot as plt
 
 from utils.GazeboRoomDataGenerator import GridWorld, FileProcess
 from utils.GazeboWorld import GazeboWorld
-from utils.ou_noise import OUNoise
-from model.drqn import DRQN
+from utils.model_utils import variable_summaries
+from model.navi_drqn import Navi_DRQN
 
 CWD = os.getcwd()
 RANDOM_SEED = 1234
@@ -27,11 +24,12 @@ flag = tf.app.flags
 flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-3, 'Critic learning rate.')
 flag.DEFINE_integer('max_epi_step', 200, 'max step.')
+flag.DEFINE_integer('max_n_demo', 10, 'max number of demo.')
+flag.DEFINE_integer('n_cmd_type', 4, 'n_cmd_typef.')
 flag.DEFINE_integer('n_hidden', 256, 'Size of each model layer.')
 flag.DEFINE_integer('n_layers', 1, 'Number of layers in the model.')
-flag.DEFINE_integer('n_cmd_type', 4, 'number of cmd class.')
-flag.DEFINE_integer('dim_rgb_h', 96, 'input rgb image height.') # 96
-flag.DEFINE_integer('dim_rgb_w', 128, 'input rgb image width.') # 128
+flag.DEFINE_integer('dim_rgb_h', 64, 'input rgb image height.') # 96
+flag.DEFINE_integer('dim_rgb_w', 64, 'input rgb image width.') # 128
 flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
 flag.DEFINE_integer('dim_depth_h', 64, 'input depth image height.') 
 flag.DEFINE_integer('dim_depth_w', 64, 'input depth image width.') 
@@ -42,114 +40,59 @@ flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
-flag.DEFINE_string('rnn_type', 'gru', 'Type of RNN (lstm, gru).')
-flag.DEFINE_integer('gpu_num', 1, 'number of gpu.')
-flag.DEFINE_boolean('dueling', False, 'dueling network')
-flag.DEFINE_boolean('prioritised_replay', False, 'prioritised experience replay')
-
-# commander param
-flag.DEFINE_integer('max_step', 300, 'max step.')
-flag.DEFINE_integer('max_n_demo', 10, 'max number of instructions')
-flag.DEFINE_integer('dim_a', 2, 'dimension of action.')
-flag.DEFINE_string('demo_mode', 'hard', 'the mode of process guidance (hard, sum)')
-flag.DEFINE_string('post_att_model', 'gru', 'the model to use after attention (gru, dense, none)')
-flag.DEFINE_integer('inputs_num', 3, 'how many kinds of inputs used (2, 4)')
-flag.DEFINE_float('keep_prob', 1.0, 'keep probability of drop out')
-flag.DEFINE_float('loss_rate', 0.01, 'rate of attention loss')
-flag.DEFINE_boolean('stochastic_hard', False, 'stochastic hard attention')
-flag.DEFINE_float('threshold', 0.6, 'prob threshold in commander')
-flag.DEFINE_boolean('load_cnn', False, 'use pretrained cnn')
-flag.DEFINE_boolean('metric_only', True, 'only use deep metric network')
 
 # training param
-flag.DEFINE_integer('max_training_step', 500000, 'max step.')
+flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
 flag.DEFINE_string('model_dir', '/mnt/Work/catkin_ws/data/vpf_data/saved_network', 'saved model directory.')
-flag.DEFINE_string('commander_model_name', 'vc_hard_gru_metric_learning', 'commander model name.')
-flag.DEFINE_string('controller_model_name', 'finetuning_3loss_mix', 'controller model name.')
-flag.DEFINE_string('model_name', "test", 'Name of the model.')
+flag.DEFINE_string('model_name', "commander_drqn", 'Name of the model.')
 flag.DEFINE_integer('steps_per_checkpoint', 100000, 'How many training steps to do per checkpoint.')
 flag.DEFINE_integer('buffer_size', 5000, 'The size of Buffer') #5000
 flag.DEFINE_float('gamma', 0.99, 'reward discount')
 flag.DEFINE_boolean('test', False, 'whether to test.')
-flag.DEFINE_boolean('supervision', False, 'supervised learning')
 flag.DEFINE_boolean('load_network', False, 'load model learning')
-flag.DEFINE_float('label_action_rate', 0.00, 'rate of using labelled action')
-flag.DEFINE_boolean('zip_img', False, 'save img as uint8')
-flag.DEFINE_boolean('gt_cmd', False, 'use ground truth command')
 
 # noise param
 flag.DEFINE_float('init_epsilon', 0.1, 'init_epsilon')
 flag.DEFINE_float('final_epsilon', 0.0001, 'final_epsilon')
-flag.DEFINE_integer('explore_steps', 500000, 'explore_steps')
+flag.DEFINE_integer('explore_steps', 1000000, 'explore_steps')
 flag.DEFINE_integer('observe_steps', 2000, 'observe_steps')
 
 flags = flag.FLAGS
 
-def finetuning(sess, robot_name='robot1'):
-    model = commander_model.visual_commander(sess=sess,
-                                             batch_size=flags.batch_size,
-                                             max_step=flags.max_step,
-                                             max_n_demo=flags.max_n_demo,
-                                             n_layers=flags.n_layers,
-                                             n_hidden=flags.n_hidden,
-                                             dim_cmd=flags.dim_cmd,
-                                             dim_img=[flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c],
-                                             dim_emb=flags.dim_emb,
-                                             dim_a=flags.dim_a,
-                                             n_cmd_type=flags.n_cmd_type,
-                                             learning_rate=flags.learning_rate,
-                                             gpu_num=flags.gpu_num,
-                                             test=True,
-                                             demo_mode=flags.demo_mode,
-                                             post_att_model=flags.post_att_model,
-                                             inputs_num=flags.inputs_num,
-                                             keep_prob=flags.keep_prob,
-                                             loss_rate=flags.loss_rate,
-                                             stochastic_hard=flags.stochastic_hard,
-                                             load_cnn=flags.load_cnn,
-                                             threshold=flags.threshold,
-                                             metric_only=flags.metric_only)
-    agent = DRQN(flags, sess, len(tf.trainable_variables()))
-
-    # initialise model
-    commander_model_dir = os.path.join(flags.model_dir, flags.commander_model_name)
-    controller_model_dir = os.path.join(flags.model_dir, flags.controller_model_name)
-    finetuned_model_dir = os.path.join(flags.model_dir, flags.model_name)
+def training(sess, robot_name='robot1'):
+    agent = Navi_DRQN(flags, sess)
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     sess.run(init_op)
     trainable_var = tf.trainable_variables()
-    commander_var = []
-    controller_var = []
+    model_dir = os.path.join(flags.model_dir, flags.model_name)
+    if not os.path.exists(model_dir): 
+        os.makedirs(model_dir)
+    # summary
+    print "  [*] printing trainable variables"
     for idx, v in enumerate(trainable_var):
-        print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
-        if 'drqn' in v.name:
-            controller_var.append(v)
-        else:
-            commander_var.append(v)
-    commander_saver = tf.train.Saver(commander_var)
-    checkpoint = tf.train.get_checkpoint_state(commander_model_dir)
-    if checkpoint and checkpoint.model_checkpoint_path:
-        commander_saver.restore(sess, checkpoint.model_checkpoint_path)
-        print 'commander model loaded: ', checkpoint.model_checkpoint_path 
-    else:
-        print 'commander model not found'
-    controller_saver = tf.train.Saver(controller_var)
-    checkpoint = tf.train.get_checkpoint_state(controller_model_dir)
-    if checkpoint and checkpoint.model_checkpoint_path:
-        controller_saver.restore(sess, checkpoint.model_checkpoint_path)
-        print 'controller model loaded: ', checkpoint.model_checkpoint_path 
-    else:
-        print 'controller model not found'
-
-    finetuned_controller_saver = tf.train.Saver(controller_var, max_to_keep=3, save_relative_paths=True)
-
+        print "  var {:3}: {:15}   {}".format(idx, str(v.get_shape()), v.name)
     if not flags.test:
         reward_ph = tf.placeholder(tf.float32, [], name='reward')
         q_ph = tf.placeholder(tf.float32, [], name='q_pred')
         tf.summary.scalar('reward', reward_ph)
         tf.summary.scalar('q_estimate', q_ph)
         merged = tf.summary.merge_all()
-        summary_writer = tf.summary.FileWriter(finetuned_model_dir, sess.graph)
+        summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
+
+    # model saver
+    if flags.test:
+        saver = tf.train.Saver(trainable_var) 
+    else:
+        saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
+    sess.run(tf.global_variables_initializer())
+
+    if flags.test or flags.load_network:
+        checkpoint = tf.train.get_checkpoint_state(model_dir)
+        if checkpoint and checkpoint.model_checkpoint_path:
+            saver.restore(sess, checkpoint.model_checkpoint_path)
+            print 'model loaded: ', checkpoint.model_checkpoint_path 
+        else:
+            print 'model not found'    
 
     # initialise env
     env = GazeboWorld(robot_name, rgb_size=[flags.dim_rgb_w, flags.dim_rgb_h])
@@ -169,23 +112,23 @@ def finetuning(sess, robot_name='robot1'):
     while not rospy.is_shutdown() and T < flags.max_training_step:
         time.sleep(1.)
         if demo_flag:
-            # if episode % 40 == 0:
-            #     print 'randomising the environment'
-            #     env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
-            #     world.RandomTableAndMap()
-            #     world.GetAugMap()
-            #     obj_list = env.GetModelStates()
-            #     obj_pose_dict = world.AllocateObject(obj_list)
-            #     for name in obj_pose_dict:
-            #         env.SetObjectPose(name, obj_pose_dict[name])
-            #     time.sleep(1.)
-            #     print 'randomisation finished'
-            world.FixedTableAndMap()
-            world.GetAugMap()
-            obj_list = env.GetModelStates()
+            if episode % 40 == 0:
+                print 'randomising the environment'
+                env.SetObjectPose(robot_name, [-1., -1., 0., 0.], once=True)
+                world.RandomTableAndMap()
+                world.GetAugMap()
+                obj_list = env.GetModelStates()
+                obj_pose_dict = world.AllocateObject(obj_list)
+                for name in obj_pose_dict:
+                    env.SetObjectPose(name, obj_pose_dict[name])
+                time.sleep(1.)
+                print 'randomisation finished'
+            # world.FixedTableAndMap()
+            # world.GetAugMap()
+            # obj_list = env.GetModelStates()
             try:
-                table_route, map_route, real_route, init_pose = world.RandomPath()
-                # table_route, map_route, real_route, init_pose = world.RandomPath(False)
+                # table_route, map_route, real_route, init_pose = world.RandomPath()
+                table_route, map_route, real_route, init_pose = world.RandomPath(False)
                 timeout_flag = False
             except:
                 timeout_flag = True
@@ -235,11 +178,7 @@ def finetuning(sess, robot_name='robot1'):
         action = [0., 0.]
         action_table = [[flags.a_linear_range, 0.],
                         [flags.a_linear_range/2, flags.a_angular_range],
-                        [flags.a_linear_range/2, -flags.a_angular_range],
-                        [0., flags.a_angular_range],
-                        [0., -flags.a_angular_range]]
-        depth_img = env.GetDepthImageObservation()
-        depth_stack = np.stack([depth_img, depth_img, depth_img], axis=-1)
+                        [flags.a_linear_range/2, -flags.a_angular_range]]
         one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
         one_hot_action[0] = 1
         goal = [0., 0.]
@@ -254,11 +193,10 @@ def finetuning(sess, robot_name='robot1'):
                                                                   test=flags.test)
             total_reward += reward
             if t > 0 and not demo_flag and not flags.test:
-                data_seq.append([depth_stack, [pred_cmd], prev_one_hot_action, one_hot_action, reward, terminate])
+                data_seq.append([rgb_image, prev_one_hot_action, one_hot_action, reward, terminate])
             
             rgb_image = env.GetRGBImageObservation()
             depth_img = env.GetDepthImageObservation()
-            depth_stack = np.stack([depth_img, depth_stack[:, :, 0], depth_stack[:, :, 1]], axis=-1)
 
             # get action
             pose = env.GetSelfStateGT()
@@ -286,30 +224,21 @@ def finetuning(sess, robot_name='robot1'):
             env.PathPublish(local_next_goal)
             if cmd in [1, 3]:
                 last_turn_cmd = cmd
-            # precit cmd
-            if not demo_flag:
-                prev_pred_cmd = pred_cmd
-                pred_cmd, att_pos = model.online_predict(input_demo_img=data_utils.img_normalisation(demo_img_seq), 
-                                                         input_demo_cmd=demo_cmd_seq, 
-                                                         input_img=np.expand_dims(data_utils.img_normalisation(rgb_image), axis=0), 
-                                                         input_prev_cmd=[[pred_cmd]], 
-                                                         input_prev_action=[action], 
-                                                         demo_len=[demo_cnt], 
-                                                         t=t,
-                                                         threshold=flags.threshold)
-                if pred_cmd == 0:
-                    pred_cmd = 2
-                if (prev_pred_cmd == 2 and pred_cmd != 2) or (prev_pred_cmd != 2 and pred_cmd == 2):
-                    last_pred_cmd = prev_pred_cmd
-                combined_cmd = last_pred_cmd * flags.n_cmd_type + pred_cmd
-                env.CommandPublish(pred_cmd)
-                env.PublishDemoRGBImage(demo_img_seq[0, att_pos], att_pos)
+            if demo_flag:
+                env.CommandPublish(cmd)
+                env.PublishDemoRGBImage(demo_img_seq[0, max(demo_cnt-1, 0)], max(demo_cnt-1, 0))
 
+                local_near_goal = env.GetLocalPoint(near_goal)
+                action = env.Controller(local_near_goal, None, 1)
+            else:
                 prev_one_hot_action = copy.deepcopy(one_hot_action)
-                if flags.gt_cmd:
-                    q, gru_h_out = agent.ActionPredict([depth_stack], [[cmd]], [prev_one_hot_action], gru_h_in)
-                else:
-                    q, gru_h_out = agent.ActionPredict([depth_stack], [[pred_cmd]], [prev_one_hot_action], gru_h_in)
+                outs = agent.ActionPredict(data_utils.img_normalisation(demo_img_seq), 
+                                           demo_cmd_seq, 
+                                           np.expand_dims(data_utils.img_normalisation(rgb_image), axis=0), 
+                                           [prev_one_hot_action], 
+                                           gru_h_in,
+                                           [demo_cnt])
+                q, gru_h_out, att_pos = outs
                 if T < flags.observe_steps and not flags.test:
                     action_index = np.random.randint(flags.dim_action)
                 elif random.random() <= epsilon and not flags.test:
@@ -319,12 +248,7 @@ def finetuning(sess, robot_name='robot1'):
                 one_hot_action = np.zeros([flags.dim_action], dtype=np.int32)
                 one_hot_action[action_index] = 1
                 action = action_table[action_index]
-            else:
-                env.CommandPublish(cmd)
-                env.PublishDemoRGBImage(demo_img_seq[0, max(demo_cnt-1, 0)], max(demo_cnt-1, 0))
-
-                local_near_goal = env.GetLocalPoint(near_goal)
-                action = env.Controller(local_near_goal, None, 1)
+                env.PublishDemoRGBImage(demo_img_seq[0, min(att_pos, demo_cnt-1)], min(att_pos, demo_cnt-1))
 
             local_next_goal = env.GetLocalPoint(next_goal)
             env.PathPublish(local_next_goal)
@@ -334,13 +258,12 @@ def finetuning(sess, robot_name='robot1'):
                 if demo_cnt < len(world.cmd_list):
                     demo_img_seq[0, demo_cnt, :, :, :] = rgb_image
                     demo_cmd_seq[0, demo_cnt, 0] = int(world.cmd_list[demo_cnt])
-                    print 'append cmd: ', int(world.cmd_list[demo_cnt])
+                    # print 'append cmd: ', int(world.cmd_list[demo_cnt])
                     demo_cnt += 1
             elif demo_flag and env.distance > 1.05:
                 demo_append_flag = True
 
             env.SelfControl(action, [0.3, np.pi/6])
-
             t += 1
             if not demo_flag:
                 gru_h_in = gru_h_out
@@ -352,13 +275,13 @@ def finetuning(sess, robot_name='robot1'):
 
                 # saving and updating
                 if (T + 1) % flags.steps_per_checkpoint == 0 and not flags.test:
-                    finetuned_controller_saver.save(sess, os.path.join(finetuned_model_dir, 'network') , global_step=episode)
+                    saver.save(sess, os.path.join(model_dir, 'network') , global_step=episode)
                 T += 1
                 training_step_time = 0.
                 if result >= 1:
-                    if not (flags.supervision and (episode+1)%10 == 0) and not flags.test:
-                        agent.Add2Mem(data_seq)
-                    mem_len = len(agent.memory.tree.data) if flags.prioritised_replay else len(agent.memory)
+                    if not flags.test:
+                        agent.Add2Mem(data_seq+[demo_img_seq[0, :demo_cnt], demo_cmd_seq[0, :demo_cnt]])
+                    mem_len = len(agent.memory)
                     if mem_len > agent.batch_size and not flags.test:
                         training_step_start_time = time.time()
                         q = agent.Train()
@@ -407,8 +330,58 @@ def finetuning(sess, robot_name='robot1'):
 
         demo_flag = not demo_flag
 
+def model_test(sess):
+    agent = Navi_DRQN(flags, sess)
+    trainable_var = tf.trainable_variables()
+    print "  [*] printing trainable variables"
+    for idx, v in enumerate(trainable_var):
+        print "  var {:3}: {:15}   {}".format(idx, str(v.get_shape()), v.name)
+
+    sess.run(tf.global_variables_initializer())
+    q_estimation = []
+    T = 0
+    max_episode = 1000
+    for episode in xrange(0, max_episode):
+        print episode
+        seq = []
+        # seq_len = np.random.randint(2, flags.max_epi_step)
+        seq_len = flags.max_epi_step
+        for t in xrange(0, seq_len):
+            term = True if t == seq_len-1 else False
+            img = np.ones([flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c])*t/np.float(flags.max_epi_step)
+            prev_a = [1, 0, 0]
+            action = [1, 0, 0]
+            sample = [img,
+                      prev_a,
+                      action, 
+                      1./flags.max_epi_step, 
+                      term]
+            seq.append(sample)
+        demo_img = np.ones([3, flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c])
+        demo_cmd = np.ones([3, flags.dim_cmd])
+        agent.Add2Mem(seq+[demo_img, demo_cmd])
+        if episode >= agent.batch_size:
+            for t in range(2):
+                q = agent.Train()
+
+        if episode > agent.batch_size:
+            q = np.reshape(q, [flags.batch_size, seq_len, flags.dim_action])
+            q_estimation.append(q[0, :, 0])
+        # else:
+        #     q_estimation.append(np.zeros([agent.max_step]))
+    q_estimation = np.vstack(q_estimation)
+    # print q_estimation
+    for t in xrange(agent.max_step):
+        plt.plot(q_estimation[:, t], label='step{}'.format(t))
+
+    plt.legend()
+    plt.show()
+
+
 if __name__ == '__main__':
-    config = tf.ConfigProto(allow_soft_placement=True)
+    # config = tf.ConfigProto(allow_soft_placement=True)
+    config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
-        finetuning(sess)
+        training(sess)
+        # model_test(sess)

@@ -341,19 +341,19 @@ class DRQN(object):
             # update
             if self.prioritised_replay:
                 q, _, mask, q_errors = self.network.Train(input_depth=depth, 
-                                                      input_action=action,
-                                                      input_cmd=cmd, 
-                                                      input_prev_a=prev_a, 
-                                                      y=y,
-                                                      length=length,
-                                                      ISWeights=ISWeights)
+                                                          input_action=action,
+                                                          input_cmd=cmd, 
+                                                          input_prev_a=prev_a, 
+                                                          y=y,
+                                                          length=length,
+                                                          ISWeights=ISWeights)
             else:
                 q, _, mask = self.network.Train(input_depth=depth, 
-                                               input_action=action,
-                                               input_cmd=cmd, 
-                                               input_prev_a=prev_a, 
-                                               y=y,
-                                               length=length)
+                                                input_action=action,
+                                                input_cmd=cmd, 
+                                                input_prev_a=prev_a, 
+                                                y=y,
+                                                length=length)
 
             train_time = time.time() - start_time - sample_time - y_time
 

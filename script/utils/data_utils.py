@@ -195,6 +195,32 @@ def read_img_file(file_name, resize=None):
 def img_resize(img, resize):
     return cv2.resize(img, (resize[0], resize[1]), interpolation=cv2.INTER_AREA)
 
+def bgr2rgb(img):
+    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+def rgb2bgr(img):
+    return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+def read_demo(demo_path, img_size, vtr=False):
+    file_list = os.listdir(demo_path)
+    img_file_list = [file_name for file_name in file_list if 'png' in file_name]
+    img_file_list.sort(key=lambda f: int(filter(str.isdigit, f)))
+    # print('img_file_list: ', img_file_list)
+    img_list = []
+    for img_file_name in img_file_list:
+        img_file_path = os.path.join(demo_path, img_file_name)
+        img, origin_img_dim = read_img_file(img_file_path, img_size)
+        img_list.append(img)
+    img_seq = np.stack(img_list, axis=0)
+    img_seq_raw = copy.deepcopy(img_seq)
+    img_seq = img_seq.astype(np.float32)
+    img_seq = img_normalisation(img_seq, real_img=True)
+
+    cmd_file_name = os.path.join(demo_path, 'cmd.txt')
+    cmd_seq = np.reshape(read_csv_file(cmd_file_name), [-1, 1])
+
+    return img_seq, cmd_seq, img_seq_raw
+
 def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
     start_time = time.time()
     mem = 0.
@@ -238,7 +264,7 @@ def read_data_to_mem(data_path, max_step, img_size, max_data_len=None):
 
         # action sequence
         action_file_name = file_path_number + '_action.csv'
-        if os.path.isfile('action_file_name'):
+        if os.path.isfile(action_file_name):
             action_seq = np.reshape(read_csv_file(action_file_name), [-1, 2])
             if len(action_seq) > max_step:
                 action_seq = action_seq[:max_step, :]
@@ -305,14 +331,22 @@ def moving_average(x, window_len):
     y = np.convolve(x, w/w.sum(), mode='same')
     return y
 
-def img_normalisation(img_seq):
+def img_normalisation(img_seq, real_img=False):
     img_seq = img_seq.astype(np.float32)
-    img_seq[..., 0] -= 75.81717218
-    img_seq[..., 0] /= 42.55792425
-    img_seq[..., 1] -= 61.19639863
-    img_seq[..., 1] /= 43.39973921
-    img_seq[..., 2] -= 49.70393136
-    img_seq[..., 2] /= 47.69464972
+    if not real_img:
+        img_seq[..., 0] -= 75.81717218
+        img_seq[..., 0] /= 42.55792425
+        img_seq[..., 1] -= 61.19639863
+        img_seq[..., 1] /= 43.39973921
+        img_seq[..., 2] -= 49.70393136
+        img_seq[..., 2] /= 47.69464972
+    else:
+        img_seq[..., 0] -= 115.73905281
+        img_seq[..., 0] /= 58.3336307
+        img_seq[..., 1] -= 105.39281073
+        img_seq[..., 1] /= 57.78756227
+        img_seq[..., 2] -= 107.12542257
+        img_seq[..., 2] /= 60.52339592
     return img_seq
     
 def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, lag=20, real_flag=False):
@@ -331,7 +365,7 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         idx = start + i
         flow_seq = data[idx][1] # l, 1
         img_seq = data[idx][0].astype(np.float32) # l, h, w, c
-        img_seq = img_normalisation(img_seq)
+        img_seq = img_normalisation(img_seq, real_img=real_flag)
 
         action_seq = data[idx][2] # l, 2
         # img_seq
@@ -419,22 +453,22 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
         batch_demo_len[i] = len(batch_demo_indicies[i])
         batch_seq_len[i] = len(flow_seq)
 
-        # plot
-        if idx > 0:
-            print(idx)
-            plt.figure(1)
-            plt.plot(action_seq[:, 1], 'r', 
-                     smoothed_flow_seq, 'g', 
-                     lagged_cmd_seq, 'b',
-                     cmd_seq, 'k',
-                     real_start_indicies, np.ones_like(real_start_indicies)*2, 'mo',
-                     real_end_indicies, np.ones_like(real_end_indicies)*2, 'yo',
-                     np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'go')
-            # plt.plot(batch_prev_cmd_seq[i, :, 0], 'r', 
-            #          batch_cmd_seq[i, :, 0], 'g', 
-            #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
-            #          end_indicies, np.ones_like(end_indicies)*2, 'yo')
-            plt.show()
+        # # plot
+        # if idx > 0:
+        #     print(idx)
+        #     plt.figure(1)
+        #     plt.plot(action_seq[:, 1], 'r', 
+        #              smoothed_flow_seq, 'g', 
+        #              lagged_cmd_seq, 'b',
+        #              cmd_seq, 'k',
+        #              real_start_indicies, np.ones_like(real_start_indicies)*2, 'mo',
+        #              real_end_indicies, np.ones_like(real_end_indicies)*2, 'yo',
+        #              np.asarray(batch_demo_indicies[i]), np.ones_like(batch_demo_indicies[i])*2, 'go')
+        #     # plt.plot(batch_prev_cmd_seq[i, :, 0], 'r', 
+        #     #          batch_cmd_seq[i, :, 0], 'g', 
+        #     #          start_indicies, np.ones_like(start_indicies)*2, 'mo',
+        #     #          end_indicies, np.ones_like(end_indicies)*2, 'yo')
+        #     plt.show()
 
     # print('sampled a batch in {:.1f}s '.format(time.time() - start_time))
     return [batch_demo_img_seq, 
@@ -448,28 +482,35 @@ def get_a_batch(data, start, batch_size, max_step, img_size, max_demo_len=10, la
             batch_demo_indicies]
 
 
-def get_a_batch_for_metric_learning(data, start, batch_size, img_size, max_len):
+def get_a_batch_for_metric_learning(data, start, batch_size, img_size, max_len, real_flag=False):
     start_time = time.time()
     batch_demo_img = np.zeros([batch_size, img_size[0], img_size[1], 3], dtype=np.float32)
     batch_posi_img_seq = np.zeros([batch_size, max_len, img_size[0], img_size[1], 3], dtype=np.float32)
     batch_nega_img_seq = np.zeros([batch_size, max_len, img_size[0], img_size[1], 3], dtype=np.float32)
     batch_posi_len = np.zeros([batch_size], dtype=np.int32)
     batch_nega_len = np.zeros([batch_size], dtype=np.int32)
-    for i in xrange(batch_size):
-        idx = start + i
+    i = 0
+    j = 0
+    while i < batch_size:
+        idx = start + j
+        if idx >= len(data):
+            idx -= len(data) 
         flow_seq = data[idx][1] # l, 1
         img_seq = data[idx][0].astype(np.float32) # l, h, w, c
         img_seq = img_normalisation(img_seq)
 
         flow_seq = np.reshape(flow_seq, [-1])
-        smoothed_flow_seq = moving_average(flow_seq, 9) # l
-        cmd_seq = copy.deepcopy(smoothed_flow_seq)
-        cmd_seq[cmd_seq<=-1] = -1
-        cmd_seq[cmd_seq>=1] = 1
-        cmd_seq[np.fabs(cmd_seq)<1] = 0
-        cmd_seq.astype(np.int32)
+        window_size = 11 if real_flag else 9
+        scale = 2 if real_flag else 1
+        smoothed_flow_seq = moving_average(flow_seq, window_size) / scale 
+        threshold = 1
+        raw_cmd_seq = copy.deepcopy(smoothed_flow_seq)
+        raw_cmd_seq[raw_cmd_seq<=-threshold] = -threshold
+        raw_cmd_seq[raw_cmd_seq>=threshold] = threshold
+        raw_cmd_seq[np.fabs(raw_cmd_seq)<threshold] = 0
+        raw_cmd_seq.astype(np.int32)
 
-        binary_cmd_seq = copy.deepcopy(cmd_seq)
+        binary_cmd_seq = copy.deepcopy(raw_cmd_seq)
         binary_cmd_seq[-1] = binary_cmd_seq[-2]
         binary_cmd_seq[binary_cmd_seq!=0] = 1
         flow_d = binary_cmd_seq[1:] - binary_cmd_seq[:-1] # l - 1
@@ -477,12 +518,27 @@ def get_a_batch_for_metric_learning(data, start, batch_size, img_size, max_len):
         start_indicies = np.where(flow_d == 1)[0]
         end_indicies = np.where(flow_d == -1)[0]
 
+        if len(start_indicies) * len(end_indicies) == 0:
+            j += 1
+            continue
+
         if start_indicies[0] < end_indicies[0]:
             end_indicies = np.r_[0, end_indicies]
         if start_indicies[-1] < end_indicies[-1]:
             start_indicies = np.r_[start_indicies, len(flow_d)]
 
         assert len(start_indicies) == len(end_indicies), 'length of turning start and end indicies not equal'
+        valid_start_indicies = []
+        valid_end_indicies = []
+        for start_idx, end_idx in zip(start_indicies, end_indicies):
+            if start_idx - end_idx > 10:
+                valid_start_indicies.append(start_idx)
+                valid_end_indicies.append(end_idx)
+        start_indicies = valid_start_indicies
+        end_indicies = valid_end_indicies
+        if len(start_indicies) * len(end_indicies) == 0:
+            j += 1
+            continue
 
         n = 0
         sampled_sec = random.sample(np.arange(len(end_indicies)), 2)
@@ -515,10 +571,13 @@ def get_a_batch_for_metric_learning(data, start, batch_size, img_size, max_len):
             batch_nega_img_seq[i, t] = img_seq[nega_indicies[t]]
         batch_posi_len[i] = len(posi_indicies)
         batch_nega_len[i] = len(nega_indicies)
+        i += 1
+        j += 1
+
         # # plot
         # plt.figure(1)
         # plt.plot(smoothed_flow_seq, 'g', 
-        #          cmd_seq, 'k',
+        #          raw_cmd_seq, 'k',
         #          posi_indicies, np.zeros_like(posi_indicies), 'm.',
         #          nega_indicies, np.zeros_like(nega_indicies), 'y.',
         #          demo_idx, np.zeros_like(demo_idx), 'bo',
@@ -616,6 +675,8 @@ def save_file(file_name, data):
         writer.writerow(row)
     file.close()
 
+def save_img(file_name, img):
+    cv2.imwrite(file_name, img)
 
 def batch_visualise(batch_data):
     batch_size = len(batch_data[0])
@@ -715,7 +776,7 @@ if __name__ == '__main__':
 
     batch_size = 8
     max_file_num = 2
-    max_step = 300
+    max_step = 10000
     img_size = (96, 128)
     max_n_demo = 10
 
@@ -726,11 +787,11 @@ if __name__ == '__main__':
 
     # write_multiple_meta_files(data_path_list, meta_file_path, max_file_num, max_step, img_size)
 
-    data = read_data_to_mem(sub_data_path, 10000, img_size, batch_size)
+    data = read_data_to_mem(sub_data_path, max_step, img_size, batch_size)
     data = segment_long_seq_data(data, 100, 200)
     print('data len: ', len(data))
-    for t in xrange(20):
-        batch_data = get_a_batch(data, t*batch_size, batch_size, max_step, img_size, max_demo_len=10, lag=20, real_flag=True)
-    # batch_data = get_a_batch_for_metric_learning(data, 0, batch_size, img_size, 20)
+    for t in xrange(15):
+    #     batch_data = get_a_batch(data, t*batch_size, batch_size, max_step, img_size, max_demo_len=10, lag=20, real_flag=True)
+        batch_data = get_a_batch_for_metric_learning(data, t*batch_size, batch_size, img_size, 20, real_flag=True)
     # image_mean_and_variance(sub_data_path, max_step, img_size)
             
