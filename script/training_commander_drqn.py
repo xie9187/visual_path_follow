@@ -33,13 +33,14 @@ flag.DEFINE_integer('dim_rgb_w', 64, 'input rgb image width.') # 128
 flag.DEFINE_integer('dim_rgb_c', 3, 'input rgb image channels.')
 flag.DEFINE_integer('dim_depth_h', 64, 'input depth image height.') 
 flag.DEFINE_integer('dim_depth_w', 64, 'input depth image width.') 
-flag.DEFINE_integer('dim_depth_c', 3, 'input depth image channels.')
+flag.DEFINE_integer('dim_depth_c', 1, 'input depth image channels.')
 flag.DEFINE_integer('dim_action', 3, 'dimension of action.')
 flag.DEFINE_integer('dim_emb', 64, 'dimension of embedding.')
 flag.DEFINE_integer('dim_cmd', 1, 'dimension of command.')
 flag.DEFINE_float('a_linear_range', 0.3, 'linear action range: 0 ~ 0.3')
 flag.DEFINE_float('a_angular_range', np.pi/6, 'angular action range: -np.pi/6 ~ np.pi/6')
 flag.DEFINE_float('tau', 0.01, 'Target network update rate')
+flag.DEFINE_string('att_mode', 'hard', 'the mode of process guidance (hard, sum)')
 
 # training param
 flag.DEFINE_integer('max_training_step', 1000000, 'max step.')
@@ -193,10 +194,10 @@ def training(sess, robot_name='robot1'):
                                                                   test=flags.test)
             total_reward += reward
             if t > 0 and not demo_flag and not flags.test:
-                data_seq.append([rgb_image, prev_one_hot_action, one_hot_action, reward, terminate])
+                data_seq.append([rgb_image, depth_img, prev_one_hot_action, one_hot_action, reward, terminate])
             
             rgb_image = env.GetRGBImageObservation()
-            depth_img = env.GetDepthImageObservation()
+            depth_img = np.expand_dims(env.GetDepthImageObservation(), axis=2)
 
             # get action
             pose = env.GetSelfStateGT()
@@ -232,9 +233,10 @@ def training(sess, robot_name='robot1'):
                 action = env.Controller(local_near_goal, None, 1)
             else:
                 prev_one_hot_action = copy.deepcopy(one_hot_action)
-                outs = agent.ActionPredict(data_utils.img_normalisation(demo_img_seq), 
+                outs = agent.ActionPredict(data_utils.img_normalisation(demo_img_seq),
                                            demo_cmd_seq, 
                                            np.expand_dims(data_utils.img_normalisation(rgb_image), axis=0), 
+                                           np.expand_dims(depth_img, 0),
                                            [prev_one_hot_action], 
                                            gru_h_in,
                                            [demo_cnt])

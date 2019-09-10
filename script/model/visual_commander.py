@@ -313,6 +313,7 @@ class visual_commander(object):
         # process demo
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
         input_demo_cmd = tf.reshape(input_demo_cmd, [-1, self.dim_cmd]) # b * n, dim_cmd
+        demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
         demo_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_demo_cmd), [-1, self.dim_emb]) # b * n, dim_emb
         demo_vect = tf.concat([demo_img_vect, demo_cmd_vect], axis=1) # b * n, dim_img_feat+dim_emb
         # 1. sum
@@ -320,7 +321,7 @@ class visual_commander(object):
         demo_vect_seq = tf.reshape(demo_vect, [-1, self.max_n_demo, shape[-1]]) # b, n, dim_img_feat+dim_emb
         demo_mask = tf.expand_dims(tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.float32), axis=2) # b, n, 1
         demo_mask = tf.tile(demo_mask, [1, 1, shape[-1]]) # b, n, dim_img_feat+dim_emb
-        demo_vect_sum = reduce_sum(demo_vect_seq*demo_mask, axis=1) # b, dim_img_feat+dim_emb
+        demo_vect_sum = tf.reduce_sum(demo_vect_seq*demo_mask, axis=1) # b, dim_img_feat+dim_emb
         demo_dense = model_utils.dense_layer(demo_vect_sum, self.n_hidden, scope='demo_dense') # b, n_hidden
         demo_dense_seq = tf.tile(tf.expand_dims(demo_dense, axis=1), [1, self.max_step, 1]) # b, l, n_hidden
         demo_dense_seq = tf.reshape(demo_dense_seq, [-1, self.n_hidden]) # b*l, n_hidden

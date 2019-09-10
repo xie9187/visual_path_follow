@@ -13,12 +13,14 @@ class Network(object):
                  sess,
                  dim_action,
                  dim_img,
+                 dim_depth,
                  dim_emb,
                  dim_cmd,
                  n_cmd_type,
                  max_n_demo,
                  n_hidden,
                  max_step,
+                 att_mode,
                  tau,
                  learning_rate,
                  batch_size,
@@ -31,8 +33,10 @@ class Network(object):
         self.n_cmd_type = n_cmd_type
         self.dim_cmd = dim_cmd
         self.dim_img = dim_img
+        self.dim_depth = dim_depth
         self.dim_emb = dim_emb
         self.dim_action = dim_action
+        self.att_mode = att_mode
         self.tau = tau
         self.learning_rate = learning_rate
 
@@ -40,6 +44,7 @@ class Network(object):
             self.input_demo_img = tf.placeholder(tf.float32, shape=[None, max_n_demo] + dim_img, name='input_demo_img') #b,l of demo,h,d,c
             self.input_demo_cmd = tf.placeholder(tf.int32, shape=[None, max_n_demo, dim_cmd], name='input_demo_cmd') #b,l of demo,2
             self.input_img = tf.placeholder(tf.float32, shape=[None, max_step, dim_img[0], dim_img[1], dim_img[2]], name='input_img') #b,l,h,d,c
+            self.input_depth = tf.placeholder(tf.float32, shape=[None, max_step, dim_depth[0], dim_depth[1], dim_depth[2]], name='input_depth') #b,l,h,d,c
             self.input_prev_action = tf.placeholder(tf.int32, shape=[None, max_step, dim_action], name='input_prev_action') #b,l,2
             self.rnn_h_in = tf.placeholder(tf.float32, shape=[None, n_hidden], name='rnn_h_in') #b,n_hidden
             self.demo_len = tf.placeholder(tf.int32, shape=[None], name='demo_len') #b
@@ -47,13 +52,19 @@ class Network(object):
 
             # testing inputs
             self.test_img = tf.placeholder(tf.float32, shape=[None, dim_img[0], dim_img[1], dim_img[2]], name='test_img') #b,h,d,c
+            self.test_depth = tf.placeholder(tf.float32, shape=[None, dim_depth[0], dim_depth[1], dim_depth[2]], name='test_depth') #b,h,d,c
             self.test_prev_action = tf.placeholder(tf.int32, shape=[None, dim_action], name='test_prev_action') #b,2
+
+            self.embedding_a = tf.get_variable('a_embedding', [self.dim_action, self.dim_emb])
+            self.embedding_cmd = tf.get_variable('cmd_embedding', [self.n_cmd_type, self.dim_emb])
 
             inputs = [self.input_demo_img, 
                       self.input_demo_cmd, 
                       self.input_img, 
+                      self.input_depth,
                       self.input_prev_action,
                       self.test_img, 
+                      self.test_depth,
                       self.test_prev_action,
                       self.rnn_h_in,
                       self.demo_len, 
@@ -83,23 +94,26 @@ class Network(object):
                  for i in range(len(self.target_network_params))] 
 
     def model(self, inputs):
-        [input_demo_img, input_demo_cmd, input_img, input_prev_action, 
-         input_img_test, input_prev_action_test, rnn_h_in, demo_len, seq_len] = inputs
-
-        embedding_a = tf.get_variable('a_embedding', [self.dim_action, self.dim_emb])
+        [input_demo_img, input_demo_cmd, input_img, input_depth, input_prev_action, 
+         input_img_test, input_depth_test, input_prev_action_test, rnn_h_in, demo_len, seq_len] = inputs
 
         # training
         input_img = tf.reshape(input_img, [-1]+self.dim_img) # b*l, dim_img
         img_vect = self.encode_image(input_img) # b*l, dim_img_feat
+        input_depth = tf.reshape(input_depth, [-1]+self.dim_depth) # b*l, dim_depth
+        depth_vect = self.encode_image(input_depth, scope='depth') # b*l, dim_depth_feat
         input_prev_action = tf.reshape(input_prev_action, [-1, self.dim_action]) # b*l, 1
         prev_action_idx = tf.argmax(input_prev_action, axis=1)
-        prev_a_vect = tf.reshape(tf.nn.embedding_lookup(embedding_a, prev_action_idx), [-1, self.dim_emb]) # b*l, dim_emb
-        demo_dense_seq, att_pos, att_logits, prob, _ = self.process_demo_hard_att(input_demo_img, 
-                                                                                  input_demo_cmd, 
-                                                                                  img_vect, 
-                                                                                  False, 
-                                                                                  demo_len)
-        all_inputs = tf.concat([demo_dense_seq, img_vect, prev_a_vect], axis=1) # b*l, n_hidden+dim_img_feat+dim_emb
+        prev_a_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_a, prev_action_idx), [-1, self.dim_emb]) # b*l, dim_emb
+        if self.att_mode == 'hard':
+            demo_dense_seq, att_pos = self.process_demo_hard_att(input_demo_img, 
+                                                                 input_demo_cmd, 
+                                                                 img_vect, 
+                                                                 False, 
+                                                                 demo_len)
+        elif self.att_mode == 'sum':
+            demo_dense_seq, _ = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len)
+        all_inputs = tf.concat([demo_dense_seq, img_vect, depth_vect, prev_a_vect], axis=1) # b*l, n_hidden+dim_img_feat+dim_emb
         inputs_dense = model_utils.dense_layer(all_inputs, self.n_hidden, scope='inputs_dense') # b*l, n_hidden
         rnn_input = tf.reshape(inputs_dense, [-1, self.max_step, self.n_hidden])
         rnn_cell = model_utils._gru_cell(self.n_hidden, 1, name='rnn_cell')
@@ -113,34 +127,39 @@ class Network(object):
         # testing
         input_img_test = tf.reshape(input_img_test, [-1]+self.dim_img) # b, dim_img
         img_vect_test = self.encode_image(input_img_test) # b, dim_img_feat
+        input_depth_test = tf.reshape(input_depth_test, [-1]+self.dim_depth) # b, dim_depth
+        depth_vect_test = self.encode_image(input_depth_test, scope='depth') # b, dim_depth_feat
         input_prev_action_test = tf.reshape(input_prev_action_test, [-1, self.dim_action]) # b, 1
         prev_action_idx_test = tf.argmax(input_prev_action_test, axis=1)
-        prev_a_vect_test = tf.reshape(tf.nn.embedding_lookup(embedding_a, prev_action_idx_test), [-1, self.dim_emb]) # b, dim_emb
-        demo_dense, att_pos, att_logits, prob, _ = self.process_demo_hard_att(input_demo_img, 
-                                                                              input_demo_cmd, 
-                                                                              img_vect_test, 
-                                                                              True, 
-                                                                              demo_len)
-        all_inputs_test = tf.concat([demo_dense, img_vect_test, prev_a_vect_test], axis=1)
+        prev_a_vect_test = tf.reshape(tf.nn.embedding_lookup(self.embedding_a, prev_action_idx_test), [-1, self.dim_emb]) # b, dim_emb
+        if self.att_mode == 'hard':
+            demo_dense, att_pos = self.process_demo_hard_att(input_demo_img, 
+                                                             input_demo_cmd, 
+                                                             img_vect_test, 
+                                                             True, 
+                                                             demo_len)
+        elif self.att_mode == 'sum':
+            _, demo_dense = self.process_demo_sum(input_demo_img, input_demo_cmd, demo_len)
+            att_pos = tf.zeros([1], dtype=tf.int32)
+        all_inputs_test = tf.concat([demo_dense, img_vect_test, depth_vect_test, prev_a_vect_test], axis=1)
         inputs_dense_test = model_utils.dense_layer(all_inputs_test, self.n_hidden, scope='inputs_dense')
         rnn_cell = model_utils._gru_cell(self.n_hidden, 1, name='rnn/rnn_cell')
         rnn_output, rnn_h_out = rnn_cell(inputs_dense_test, rnn_h_in) # b, n_hidden | b, n_hidden
         q_test = model_utils.dense_layer(rnn_output, self.dim_action, scope='q_test', activation=None) # b, dim_action
         return q, q_test, rnn_h_out, att_pos
 
-    def encode_image(self, inputs, activation=tf.nn.leaky_relu):
+    def encode_image(self, inputs, activation=tf.nn.leaky_relu, scope='rgb'):
         trainable = True
-        conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope='conv1', max_pool=False, trainable=trainable, activation=activation)
-        conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope='conv2', max_pool=False, trainable=trainable, activation=activation)
-        conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope='conv3', max_pool=False, trainable=trainable, activation=activation)
-        conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope='conv4', max_pool=False, trainable=trainable, activation=activation)
-        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope='conv5', max_pool=False, trainable=trainable, activation=None)
+        conv1 = model_utils.conv2d(inputs, 16, 3, 2, scope=scope+'/conv1', max_pool=False, trainable=trainable, activation=activation)
+        conv2 = model_utils.conv2d(conv1, 32, 3, 2, scope=scope+'/conv2', max_pool=False, trainable=trainable, activation=activation)
+        conv3 = model_utils.conv2d(conv2, 64, 3, 2, scope=scope+'/conv3', max_pool=False, trainable=trainable, activation=activation)
+        conv4 = model_utils.conv2d(conv3, 128, 3, 2, scope=scope+'/conv4', max_pool=False, trainable=trainable, activation=activation)
+        conv5 = model_utils.conv2d(conv4, 256, 3, 2, scope=scope+'/conv5', max_pool=False, trainable=trainable, activation=None)
         shape = conv5.get_shape().as_list()
         outputs = tf.reshape(conv5, shape=[-1, shape[1]*shape[2]*shape[3]]) # b*l, dim_img_feat
         return outputs
 
     def process_demo_hard_att(self, input_demo_img, input_demo_cmd, img_vect, test_flag, demo_len):
-        embedding_cmd = tf.get_variable('cmd_embedding', [self.n_cmd_type, self.dim_emb])
         input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
         demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
         shape = demo_img_vect.get_shape().as_list()
@@ -166,7 +185,7 @@ class Network(object):
         coords = tf.stack([tf.range(shape[0]), tf.cast(att_pos, dtype=tf.int32)], axis=1) # b*l, 2
         attended_demo_img_vect = tf.gather_nd(demo_img_vect, coords) # b*l,  dim_img_feat 
 
-        demo_cmd_vect = tf.reshape(tf.nn.embedding_lookup(embedding_cmd, input_demo_cmd), [-1, self.max_n_demo, self.dim_emb]) # b, n, dim_emb
+        demo_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_demo_cmd), [-1, self.max_n_demo, self.dim_emb]) # b, n, dim_emb
         if not test_flag:
             demo_cmd_vect = tf.tile(tf.expand_dims(demo_cmd_vect, axis=1), [1, self.max_step, 1, 1]) # b, l, n, dim_emb
             demo_cmd_vect = tf.reshape(demo_cmd_vect, [-1, self.max_n_demo, self.dim_emb]) # b*l, n, dim_emb
@@ -176,46 +195,69 @@ class Network(object):
         demo_vect = tf.concat([attended_demo_img_vect, attended_demo_cmd_vect], axis=1) # b*l, dim_img_feat+dim_emb
         demo_dense = model_utils.dense_layer(demo_vect, self.n_hidden, scope='demo_dense') # b*l, n_hidden
 
-        return demo_dense, att_pos, logits, masked_prob, l2_norm
+        return demo_dense, att_pos
 
-    def Train(self, input_demo_img, input_demo_cmd, input_img, input_prev_action, input_action, y, demo_len, seq_len):
+    def process_demo_sum(self, input_demo_img, input_demo_cmd, demo_len):
+        # process demo
+        input_demo_img = tf.reshape(input_demo_img, [-1]+self.dim_img) # b * n, h, w, c
+        input_demo_cmd = tf.reshape(input_demo_cmd, [-1, self.dim_cmd]) # b * n, dim_cmd
+        demo_img_vect = self.encode_image(input_demo_img) # b * n, dim_img_feat
+        demo_cmd_vect = tf.reshape(tf.nn.embedding_lookup(self.embedding_cmd, input_demo_cmd), [-1, self.dim_emb]) # b * n, dim_emb
+        demo_vect = tf.concat([demo_img_vect, demo_cmd_vect], axis=1) # b * n, dim_img_feat+dim_emb
+        # 1. sum
+        shape = demo_vect.get_shape().as_list()
+        demo_vect_seq = tf.reshape(demo_vect, [-1, self.max_n_demo, shape[-1]]) # b, n, dim_img_feat+dim_emb
+        demo_mask = tf.expand_dims(tf.sequence_mask(demo_len, maxlen=self.max_n_demo, dtype=tf.float32), axis=2) # b, n, 1
+        demo_mask = tf.tile(demo_mask, [1, 1, shape[-1]]) # b, n, dim_img_feat+dim_emb
+        demo_vect_sum = tf.reduce_sum(demo_vect_seq*demo_mask, axis=1) # b, dim_img_feat+dim_emb
+        demo_dense = model_utils.dense_layer(demo_vect_sum, self.n_hidden, scope='demo_dense') # b, n_hidden
+        demo_dense_seq = tf.tile(tf.expand_dims(demo_dense, axis=1), [1, self.max_step, 1]) # b, l, n_hidden
+        demo_dense_seq = tf.reshape(demo_dense_seq, [-1, self.n_hidden]) # b*l, n_hidden
+
+        return demo_dense_seq, demo_dense
+
+    def Train(self, input_demo_img, input_demo_cmd, input_img, input_depth, input_prev_action, input_action, y, demo_len, seq_len):
         return self.sess.run([self.q_online, self.optimize, self.mask], feed_dict={
             self.input_demo_img: input_demo_img,
             self.input_demo_cmd: input_demo_cmd,
             self.demo_len: demo_len,
             self.input_img: input_img,
+            self.input_depth: input_depth,
             self.input_prev_action: input_prev_action,
             self.input_action: input_action,
             self.y: y,
             self.seq_len: seq_len
             })
 
-    def PredictSeqTarget(self, input_demo_img, input_demo_cmd, input_img, input_prev_action, demo_len, seq_len):
+    def PredictSeqTarget(self, input_demo_img, input_demo_cmd, input_img, input_depth, input_prev_action, demo_len, seq_len):
         return self.sess.run(self.q_target, feed_dict={
             self.input_demo_img: input_demo_img,
             self.input_demo_cmd: input_demo_cmd,
             self.demo_len: demo_len,
             self.input_img: input_img,
+            self.input_depth: input_depth,
             self.input_prev_action: input_prev_action,
             self.seq_len: seq_len
             })
 
-    def PredictSeqOnline(self, input_demo_img, input_demo_cmd, input_img, input_prev_action, demo_len, seq_len):
+    def PredictSeqOnline(self, input_demo_img, input_demo_cmd, input_img, input_depth, input_prev_action, demo_len, seq_len):
         return self.sess.run(self.q_online, feed_dict={
             self.input_demo_img: input_demo_img,
             self.input_demo_cmd: input_demo_cmd,
             self.demo_len: demo_len,
             self.input_img: input_img,
+            self.input_depth: input_depth,
             self.input_prev_action: input_prev_action,
             self.seq_len: seq_len
             })
 
-    def Predict(self, input_demo_img, input_demo_cmd, input_img, input_prev_action, rnn_h_in, demo_len):
+    def Predict(self, input_demo_img, input_demo_cmd, input_img, input_depth, input_prev_action, rnn_h_in, demo_len):
         return self.sess.run([self.q_test, self.rnn_h_out, self.att_pos], feed_dict={
             self.input_demo_img: input_demo_img,
             self.input_demo_cmd: input_demo_cmd,
             self.demo_len: demo_len,
             self.test_img: input_img,
+            self.test_depth: input_depth,
             self.test_prev_action: input_prev_action,
             self.rnn_h_in: rnn_h_in
             })
@@ -225,8 +267,9 @@ class Network(object):
 
 class Navi_DRQN(object):
     """Navi_DRQN"""
-    def __init__(self, flags, sess, var_start=0):
+    def __init__(self, flags, sess, var_start=2):
         self.dim_img = [flags.dim_rgb_h, flags.dim_rgb_w, flags.dim_rgb_c]
+        self.dim_depth = [flags.dim_depth_h, flags.dim_depth_w, flags.dim_depth_c]
         self.dim_action = flags.dim_action
         self.dim_emb = flags.dim_emb
         self.dim_cmd = flags.dim_cmd
@@ -240,16 +283,19 @@ class Navi_DRQN(object):
         self.action_range = [flags.a_linear_range, flags.a_angular_range]
         self.buffer_size = flags.buffer_size
         self.gamma = flags.gamma
+        self.att_mode = flags.att_mode
 
         self.network = Network(sess=sess,
                                dim_action=self.dim_action,
                                dim_img=self.dim_img,
+                               dim_depth=self.dim_depth,
                                dim_emb=self.dim_emb,
                                dim_cmd=self.dim_cmd,
                                max_n_demo=self.max_n_demo,
                                max_step=self.max_step,
                                n_cmd_type=self.n_cmd_type,
                                n_hidden=self.n_hidden,
+                               att_mode=self.att_mode,
                                tau=self.tau,
                                learning_rate=self.learning_rate,
                                batch_size=self.batch_size,
@@ -257,20 +303,22 @@ class Navi_DRQN(object):
 
         self.memory = []
         self.batch_info_list = [{'name': 'img', 'dim': [self.batch_size, self.max_step]+self.dim_img, 'type': np.float32},
+                                {'name': 'depth', 'dim': [self.batch_size, self.max_step]+self.dim_depth, 'type': np.float32},
                                 {'name': 'prev_a', 'dim': [self.batch_size, self.max_step, self.dim_action], 'type': np.int32}, 
                                 {'name': 'action', 'dim': [self.batch_size, self.max_step, self.dim_action], 'type': np.int32},
                                 {'name': 'reward', 'dim': [self.batch_size, self.max_step], 'type': np.float32},
                                 {'name': 'terminate', 'dim': [self.batch_size, self.max_step], 'type': np.float32},
                                 {'name': 'img_t1', 'dim': [self.batch_size, self.max_step]+self.dim_img, 'type': np.float32},
+                                {'name': 'depth_t1', 'dim': [self.batch_size, self.max_step]+self.dim_depth, 'type': np.float32},
                                 {'name': 'prev_a_t1', 'dim': [self.batch_size, self.max_step, self.dim_action], 'type': np.int32}]
 
-    def ActionPredict(self, input_demo_img, input_demo_cmd, input_img, input_prev_action, rnn_h_in, demo_len):
-        a, rnn_h_out, att_pos = self.network.Predict(input_demo_img, input_demo_cmd, input_img, input_prev_action, rnn_h_in, demo_len)
+    def ActionPredict(self, input_demo_img, input_demo_cmd, input_img, input_depth, input_prev_action, rnn_h_in, demo_len):
+        a, rnn_h_out, att_pos = self.network.Predict(input_demo_img, input_demo_cmd, input_img, input_depth, input_prev_action, rnn_h_in, demo_len)
         return a[0], rnn_h_out, att_pos[0]
 
     def Add2Mem(self, sample):
         if len(sample) <= self.max_step+2:
-            self.memory.append(sample) # seqs of (img, prev_a, action, reward, terminate)... (), demo_img, demo_cmd
+            self.memory.append(sample) # seqs of (img, depth, prev_a, action, reward, terminate)... (), demo_img, demo_cmd
         if len(self.memory) > self.buffer_size:
             self.memory.pop(0)
 
@@ -291,18 +339,20 @@ class Navi_DRQN(object):
                 seq_len = len(sampled_seq)-2
                 for t in xrange(0, seq_len):
                     batch[0][i, t, :, :, :] = data_utils.img_normalisation(sampled_seq[t][0])
-                    batch[1][i, t, :] = sampled_seq[t][1]
+                    batch[1][i, t, :, :, :] = sampled_seq[t][1]
                     batch[2][i, t, :] = sampled_seq[t][2]
-                    batch[3][i, t] = sampled_seq[t][3]
+                    batch[3][i, t, :] = sampled_seq[t][3]
                     batch[4][i, t] = sampled_seq[t][4]
-                    batch[5][i, t, :, :, :] = sampled_seq[t+1][0] if t < seq_len - 1 else sampled_seq[t][0]
-                    batch[6][i, t, :] = sampled_seq[t+1][1] if t < seq_len - 1 else sampled_seq[t][1]
+                    batch[5][i, t] = sampled_seq[t][5]
+                    batch[6][i, t, :, :, :] = sampled_seq[t+1][0] if t < seq_len - 1 else sampled_seq[t][0]
+                    batch[7][i, t, :, :, :] = sampled_seq[t+1][1] if t < seq_len - 1 else sampled_seq[t][1]
+                    batch[8][i, t, :] = sampled_seq[t+1][2] if t < seq_len - 1 else sampled_seq[t][2]
                 demo_len = len(sampled_seq[t+1])
                 for n in xrange(0, demo_len):
-                    batch[7][i, n, :, :, :] = data_utils.img_normalisation(sampled_seq[t+1][n])
-                    batch[8][i, n, :] = sampled_seq[t+2][n]
-                batch[9][i] = demo_len
-                batch[10][i] = seq_len
+                    batch[9][i, n, :, :, :] = data_utils.img_normalisation(sampled_seq[t+1][n])
+                    batch[10][i, n, :] = sampled_seq[t+2][n]
+                batch[11][i] = demo_len
+                batch[12][i] = seq_len
             return batch
         else:
             print 'samples are not enough'
@@ -316,17 +366,19 @@ class Navi_DRQN(object):
         if not batch:
             return 0.
         else:
-            [img, prev_a, action, reward, terminate, img_t1, prev_a_t1, 
+            [img, depth, prev_a, action, reward, terminate, img_t1, depth_t1, prev_a_t1, 
              demo_img, demo_cmd, demo_len, seq_len] = batch
             target_q = self.network.PredictSeqTarget(input_demo_img=demo_img, 
                                                      input_demo_cmd=demo_cmd, 
-                                                     input_img=img_t1, 
+                                                     input_img=img_t1,
+                                                     input_depth=depth_t1,
                                                      input_prev_action=prev_a_t1, 
                                                      demo_len=demo_len, 
                                                      seq_len=seq_len)
             online_q = self.network.PredictSeqOnline(input_demo_img=demo_img, 
                                                      input_demo_cmd=demo_cmd, 
-                                                     input_img=img, 
+                                                     input_img=img,
+                                                     input_depth=depth,
                                                      input_prev_action=prev_a, 
                                                      demo_len=demo_len, 
                                                      seq_len=seq_len)
@@ -348,6 +400,7 @@ class Navi_DRQN(object):
             q, _, mask = self.network.Train(input_demo_img=demo_img, 
                                             input_demo_cmd=demo_cmd, 
                                             input_img=img, 
+                                            input_depth=depth,
                                             input_prev_action=prev_a, 
                                             input_action=action, 
                                             y=y, 
